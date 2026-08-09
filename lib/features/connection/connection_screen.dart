@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -5,12 +7,15 @@ import 'package:go_router/go_router.dart';
 import '../../core/router/app_router.dart';
 import '../../core/theme/app_theme.dart';
 import '../../models/connection_state.dart';
+import '../../services/bluetooth_permission_service.dart';
 import '../../widgets/app_button.dart';
 import '../../widgets/app_card.dart';
 import '../../widgets/connection_badge.dart';
 import '../../widgets/section_header.dart';
 import '../settings/settings_controller.dart';
+import 'bluetooth_permission_controller.dart';
 import 'connection_controller.dart';
+import 'widgets/bluetooth_permission_card.dart';
 import 'widgets/device_tile.dart';
 
 /// Pair with a vehicle: scan, connect, and understand any failure well enough
@@ -22,23 +27,70 @@ class ConnectionScreen extends ConsumerStatefulWidget {
   ConsumerState<ConnectionScreen> createState() => _ConnectionScreenState();
 }
 
-class _ConnectionScreenState extends ConsumerState<ConnectionScreen> {
+class _ConnectionScreenState extends ConsumerState<ConnectionScreen>
+    with WidgetsBindingObserver {
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     // Start looking immediately; arriving here always means "find my vehicle".
-    WidgetsBinding.instance.addPostFrameCallback((_) {
+    // Mock mode never touches the radio, so it skips the permission gate
+    // entirely; real hardware waits for a granted check before scanning.
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
       if (!mounted) return;
-      final link = ref.read(connectionProvider);
-      if (!link.isConnected) ref.read(connectionProvider.notifier).startScan();
+      if (ref.read(settingsProvider).mockMode) {
+        _startScanIfIdle();
+        return;
+      }
+      final status = await ref
+          .read(bluetoothPermissionProvider.notifier)
+          .refresh();
+      if (mounted && status == RoverPermissionStatus.granted) {
+        _startScanIfIdle();
+      }
     });
   }
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     // The controller outlives this screen, so leave the transport tidy.
     ref.read(connectionProvider.notifier).stopScan();
     super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    // Coming back from the OS Settings app is the only way permission can
+    // change while this screen is open — pick that up so the user does not
+    // have to back out and re-enter to continue.
+    if (state != AppLifecycleState.resumed) return;
+    if (ref.read(settingsProvider).mockMode) return;
+    unawaited(_recheckPermissionAfterResume());
+  }
+
+  Future<void> _recheckPermissionAfterResume() async {
+    final wasGranted =
+        ref.read(bluetoothPermissionProvider).value?.isGranted ?? false;
+    final status = await ref
+        .read(bluetoothPermissionProvider.notifier)
+        .refresh();
+    if (mounted && !wasGranted && status == RoverPermissionStatus.granted) {
+      _startScanIfIdle();
+    }
+  }
+
+  void _startScanIfIdle() {
+    if (!mounted) return;
+    final link = ref.read(connectionProvider);
+    if (!link.isConnected) ref.read(connectionProvider.notifier).startScan();
+  }
+
+  Future<void> _requestPermission() async {
+    final status = await ref
+        .read(bluetoothPermissionProvider.notifier)
+        .request();
+    if (status == RoverPermissionStatus.granted) _startScanIfIdle();
   }
 
   @override
@@ -48,6 +100,10 @@ class _ConnectionScreenState extends ConsumerState<ConnectionScreen> {
     final settings = ref.watch(settingsProvider);
     final controller = ref.read(connectionProvider.notifier);
     final isScanning = link.status == ConnectionStatus.scanning;
+
+    final permissionStatus = settings.mockMode
+        ? RoverPermissionStatus.granted
+        : ref.watch(bluetoothPermissionProvider).value;
 
     return Scaffold(
       backgroundColor: AppColors.background,
@@ -85,57 +141,67 @@ class _ConnectionScreenState extends ConsumerState<ConnectionScreen> {
               const _MockNotice(),
             ],
             const SizedBox(height: AppSpacing.xxl),
-            SectionHeader(
-              title: isScanning ? 'SCANNING…' : 'AVAILABLE VEHICLES',
-              icon: Icons.bluetooth_searching_rounded,
-              subtitle: isScanning
-                  ? 'Keep the vehicle powered on and nearby'
-                  : '${devices.length} device${devices.length == 1 ? '' : 's'} found',
-              trailing: isScanning
-                  ? const SizedBox(
-                      height: 16,
-                      width: 16,
-                      child: CircularProgressIndicator(
-                        strokeWidth: 2,
-                        color: AppColors.accent,
-                      ),
-                    )
-                  : null,
-            ),
-            if (devices.isEmpty)
-              _EmptyScanState(isScanning: isScanning)
-            else
-              for (final device in devices)
-                DeviceTile(
-                  vehicle: device,
-                  isRemembered: device.id == link.deviceId,
-                  isConnecting:
-                      link.status == ConnectionStatus.connecting &&
-                      link.deviceId == device.id,
-                  isConnected: link.isConnected && link.deviceId == device.id,
-                  onConnect: () => controller.connectTo(device),
-                ),
-            const SizedBox(height: AppSpacing.xxl),
-            if (link.isConnected)
-              AppButton(
-                label: 'CONTINUE',
-                icon: Icons.check_rounded,
-                size: AppButtonSize.large,
-                fullWidth: true,
-                onPressed: () => context.canPop()
-                    ? context.pop()
-                    : context.go(AppRoute.home),
+            if (permissionStatus != null && !permissionStatus.isGranted)
+              BluetoothPermissionCard(
+                status: permissionStatus,
+                onRequest: _requestPermission,
+                onOpenSettings: () =>
+                    ref.read(bluetoothPermissionServiceProvider).openSettings(),
               )
-            else
-              AppButton(
-                label: isScanning ? 'STOP SCAN' : 'SCAN AGAIN',
-                icon: isScanning ? Icons.stop_rounded : Icons.refresh_rounded,
-                variant: AppButtonVariant.secondary,
-                size: AppButtonSize.large,
-                fullWidth: true,
-                onPressed: () =>
-                    isScanning ? controller.stopScan() : controller.startScan(),
+            else ...[
+              SectionHeader(
+                title: isScanning ? 'SCANNING…' : 'AVAILABLE VEHICLES',
+                icon: Icons.bluetooth_searching_rounded,
+                subtitle: isScanning
+                    ? 'Keep the vehicle powered on and nearby'
+                    : '${devices.length} device${devices.length == 1 ? '' : 's'} found',
+                trailing: isScanning
+                    ? const SizedBox(
+                        height: 16,
+                        width: 16,
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2,
+                          color: AppColors.accent,
+                        ),
+                      )
+                    : null,
               ),
+              if (devices.isEmpty)
+                _EmptyScanState(isScanning: isScanning)
+              else
+                for (final device in devices)
+                  DeviceTile(
+                    vehicle: device,
+                    isRemembered: device.id == link.deviceId,
+                    isConnecting:
+                        link.status == ConnectionStatus.connecting &&
+                        link.deviceId == device.id,
+                    isConnected: link.isConnected && link.deviceId == device.id,
+                    onConnect: () => controller.connectTo(device),
+                  ),
+              const SizedBox(height: AppSpacing.xxl),
+              if (link.isConnected)
+                AppButton(
+                  label: 'CONTINUE',
+                  icon: Icons.check_rounded,
+                  size: AppButtonSize.large,
+                  fullWidth: true,
+                  onPressed: () => context.canPop()
+                      ? context.pop()
+                      : context.go(AppRoute.home),
+                )
+              else
+                AppButton(
+                  label: isScanning ? 'STOP SCAN' : 'SCAN AGAIN',
+                  icon: isScanning ? Icons.stop_rounded : Icons.refresh_rounded,
+                  variant: AppButtonVariant.secondary,
+                  size: AppButtonSize.large,
+                  fullWidth: true,
+                  onPressed: () => isScanning
+                      ? controller.stopScan()
+                      : controller.startScan(),
+                ),
+            ],
             if (link.hasRememberedDevice) ...[
               const SizedBox(height: AppSpacing.md),
               Center(
