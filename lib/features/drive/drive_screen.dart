@@ -20,6 +20,7 @@ import '../../widgets/feature_placeholder.dart';
 import '../auto/widgets/radar_view.dart';
 import '../auto/widgets/servo_control.dart';
 import '../connection/connection_controller.dart';
+import '../perception/perception_controller.dart';
 import '../settings/settings_controller.dart';
 import '../telemetry/telemetry_controller.dart';
 import 'drive_controller.dart';
@@ -182,10 +183,17 @@ class _DriveScreenState extends ConsumerState<DriveScreen>
           final drive = ref.watch(driveProvider);
           final telemetry = ref.watch(telemetryProvider);
           final settings = ref.watch(settingsProvider);
+          final perception = ref.watch(perceptionProvider);
           return Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              RadarView(telemetry: telemetry, settings: settings, size: 260),
+              RadarView(
+                telemetry: telemetry,
+                settings: settings,
+                size: 260,
+                perception: perception,
+                isSweeping: drive.scanMode == ScanMode.auto,
+              ),
               const SizedBox(height: AppSpacing.xl),
               ServoControl(
                 currentAngle: telemetry.servoAngle ?? 90,
@@ -209,6 +217,7 @@ class _DriveScreenState extends ConsumerState<DriveScreen>
     final drive = ref.watch(driveProvider);
     final telemetry = ref.watch(telemetryProvider);
     final settings = ref.watch(settingsProvider);
+    final perception = ref.watch(perceptionProvider);
 
     // A tick when the commanded direction changes, so the driver feels the
     // vehicle switch from forward to a pivot without looking down. Deliberately
@@ -229,6 +238,7 @@ class _DriveScreenState extends ConsumerState<DriveScreen>
                 drive: drive,
                 telemetry: telemetry,
                 settings: settings,
+                perception: perception,
                 onJoystick: _onJoystick,
                 onJoystickReleased: _onJoystickReleased,
                 onEngaged: _onEngaged,
@@ -303,6 +313,7 @@ class _DriveHud extends StatelessWidget {
     required this.drive,
     required this.telemetry,
     required this.settings,
+    required this.perception,
     required this.onJoystick,
     required this.onJoystickReleased,
     required this.onEngaged,
@@ -320,6 +331,7 @@ class _DriveHud extends StatelessWidget {
   final DriveState drive;
   final Telemetry telemetry;
   final AppSettings settings;
+  final PerceptionSnapshot perception;
   final void Function(double x, double y) onJoystick;
   final VoidCallback onJoystickReleased;
   final VoidCallback onEngaged;
@@ -373,6 +385,7 @@ class _DriveHud extends StatelessWidget {
               telemetry: telemetry,
               settings: settings,
               drive: drive,
+              perception: perception,
               onOpenServo: onOpenServo,
               onOpenSpeed: onOpenSpeed,
               onOpenLights: onOpenLights,
@@ -478,6 +491,7 @@ class _SensorRail extends StatelessWidget {
     required this.telemetry,
     required this.settings,
     required this.drive,
+    required this.perception,
     required this.onOpenServo,
     required this.onOpenSpeed,
     required this.onOpenLights,
@@ -486,6 +500,7 @@ class _SensorRail extends StatelessWidget {
   final Telemetry telemetry;
   final AppSettings settings;
   final DriveState drive;
+  final PerceptionSnapshot perception;
   final VoidCallback onOpenServo;
   final VoidCallback onOpenSpeed;
   final VoidCallback onOpenLights;
@@ -509,11 +524,14 @@ class _SensorRail extends StatelessWidget {
               settings: settings,
               isStale: telemetry.isStale(),
               compact: true,
+              proximity: perception.hasData ? perception.proximity : null,
             ),
             const SizedBox(height: AppSpacing.md),
             _RadarPreviewCard(
               telemetry: telemetry,
               settings: settings,
+              perception: perception,
+              isSweeping: drive.scanMode == ScanMode.auto,
               onOpenServo: onOpenServo,
             ),
             const SizedBox(height: AppSpacing.md),
@@ -656,11 +674,15 @@ class _RadarPreviewCard extends StatelessWidget {
   const _RadarPreviewCard({
     required this.telemetry,
     required this.settings,
+    required this.perception,
+    required this.isSweeping,
     required this.onOpenServo,
   });
 
   final Telemetry telemetry;
   final AppSettings settings;
+  final PerceptionSnapshot perception;
+  final bool isSweeping;
   final VoidCallback onOpenServo;
 
   @override
@@ -694,6 +716,8 @@ class _RadarPreviewCard extends StatelessWidget {
                       settings: settings,
                       size: constraints.maxWidth,
                       compact: true,
+                      perception: perception,
+                      isSweeping: isSweeping,
                     ),
                   ),
                   const SizedBox(height: 4),

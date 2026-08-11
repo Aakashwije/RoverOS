@@ -3,6 +3,8 @@ import 'dart:math' as math;
 import 'package:flutter/material.dart';
 
 import '../../../core/constants/app_config.dart';
+import '../../../core/perception/perception_engine.dart';
+import '../../../core/perception/radar_field.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../models/settings.dart';
 import '../../../models/telemetry.dart';
@@ -14,6 +16,12 @@ import '../../../models/telemetry.dart';
 /// radius proportional to its distance; the sweep needle animates to the
 /// vehicle's current servo angle. All rendering is a single [CustomPainter] so
 /// the sweep can update every telemetry tick without rebuilding a widget tree.
+///
+/// Supplying [perception] adds the app's own reading of the same sweep on top:
+/// the traversable gap, and chords across the returns that resolved into a flat
+/// surface. Those are drawn in a single deliberately un-alarming colour —
+/// they are the phone's inference, not the vehicle's decision, and they must
+/// never be mistaken for one.
 class RadarView extends StatelessWidget {
   const RadarView({
     super.key,
@@ -22,6 +30,7 @@ class RadarView extends StatelessWidget {
     this.size = 260,
     this.compact = false,
     this.isSweeping = false,
+    this.perception,
   });
 
   final Telemetry telemetry;
@@ -30,6 +39,9 @@ class RadarView extends StatelessWidget {
 
   /// Drops labels and rings for the small Drive-HUD preview.
   final bool compact;
+
+  /// Inferred gaps and surfaces. Omit to draw the raw sweep alone.
+  final PerceptionSnapshot? perception;
 
   /// Brightens the needle and widens its trail while the servo is actually
   /// sweeping. Standing still, a radar drawn at full intensity implies the
@@ -59,13 +71,16 @@ class RadarView extends StatelessWidget {
       ...telemetry.radarSamples,
     };
 
+    final field = perception?.field;
+
     return Semantics(
       label:
           'Radar. Servo at ${telemetry.servoAngle ?? 90} degrees. '
           'Left ${settings.units.format(telemetry.leftDistanceCm)}, '
           'centre ${settings.units.format(telemetry.centerDistanceCm)}, '
           'right ${settings.units.format(telemetry.rightDistanceCm)} '
-          '${settings.units.shortLabel}.',
+          '${settings.units.shortLabel}.'
+          '${field != null && field.hasData ? " ${field.summary}." : ""}',
       child: ExcludeSemantics(
         child: SizedBox(
           width: size,
@@ -87,6 +102,7 @@ class RadarView extends StatelessWidget {
                 dangerCm: settings.dangerDistanceCm,
                 compact: compact,
                 isSweeping: isSweeping,
+                field: field,
               ),
             ),
           ),
@@ -105,6 +121,7 @@ class _RadarPainter extends CustomPainter {
     required this.dangerCm,
     required this.compact,
     required this.isSweeping,
+    this.field,
   });
 
   final double sweepAngle;
@@ -114,6 +131,7 @@ class _RadarPainter extends CustomPainter {
   final int dangerCm;
   final bool compact;
   final bool isSweeping;
+  final FieldAnalysis? field;
 
   @override
   void paint(Canvas canvas, Size size) {
@@ -126,7 +144,10 @@ class _RadarPainter extends CustomPainter {
     _paintSector(canvas, origin, radius);
     _paintRings(canvas, origin, radius);
     _paintSpokes(canvas, origin, radius);
+    // Under the samples: inference is background, measurement is foreground.
+    _paintGap(canvas, origin, radius);
     _paintSweep(canvas, origin, radius);
+    _paintSurfaces(canvas, origin, radius);
     _paintSamples(canvas, origin, radius);
     _paintOrigin(canvas, origin);
   }
@@ -301,6 +322,113 @@ class _RadarPainter extends CustomPainter {
     }
   }
 
+  /// The route the app would take, if it were the one driving. It is not: this
+  /// is a wedge and a chevron, drawn so the driver can see the opening the
+  /// rover is about to have to thread.
+  void _paintGap(Canvas canvas, Offset origin, double radius) {
+    final gap = field?.recommended;
+    if (gap == null) return;
+
+    final startAngle = RadarView.canvasAngleFor(gap.startDegrees.toDouble());
+    final sweep = math.pi * (gap.endDegrees - gap.startDegrees) / 180;
+
+    canvas.drawArc(
+      Rect.fromCircle(center: origin, radius: radius),
+      startAngle,
+      sweep,
+      true,
+      Paint()
+        // A gap resting on bearings the sweep never covered is a guess, and
+        // it is drawn at half strength so it cannot pass for a measurement.
+        ..color = AppColors.info.withValues(
+          alpha: gap.isFullyObserved ? 0.15 : 0.07,
+        ),
+    );
+
+    final canvasAngle = RadarView.canvasAngleFor(gap.headingDegrees.toDouble());
+    final direction = Offset(math.cos(canvasAngle), math.sin(canvasAngle));
+    final line = Paint()
+      ..strokeWidth = compact ? 1.5 : 2
+      ..strokeCap = StrokeCap.round
+      ..style = PaintingStyle.stroke
+      ..color = AppColors.info.withValues(alpha: 0.75);
+
+    final tip = origin + direction * (radius - 2);
+    canvas.drawLine(origin, tip, line);
+
+    final barb = compact ? 6.0 : 9.0;
+    final back = math.atan2(-direction.dy, -direction.dx);
+    canvas.drawPath(
+      Path()
+        ..moveTo(
+          tip.dx + math.cos(back - 0.4) * barb,
+          tip.dy + math.sin(back - 0.4) * barb,
+        )
+        ..lineTo(tip.dx, tip.dy)
+        ..lineTo(
+          tip.dx + math.cos(back + 0.4) * barb,
+          tip.dy + math.sin(back + 0.4) * barb,
+        ),
+      line,
+    );
+  }
+
+  /// Chords across the returns that resolved into one flat surface. Two dots
+  /// joined by a line read as a wall; the same two dots alone read as two
+  /// objects, and the difference matters when deciding where to steer.
+  void _paintSurfaces(Canvas canvas, Offset origin, double radius) {
+    final surfaces = field?.surfaces;
+    if (surfaces == null) return;
+
+    final stroke = Paint()
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = compact ? 1.5 : 2
+      ..strokeCap = StrokeCap.round
+      ..strokeJoin = StrokeJoin.round
+      ..color = AppColors.info.withValues(alpha: 0.5);
+
+    for (final surface in surfaces) {
+      if (surface.kind != SurfaceKind.wall &&
+          surface.kind != SurfaceKind.corner) {
+        continue;
+      }
+
+      final plotted = <({int angle, Offset at})>[];
+      for (final sample in samples.values) {
+        final distance = sample.distanceCm;
+        if (distance == null) continue;
+        if (sample.angle < surface.startDegrees) continue;
+        if (sample.angle > surface.endDegrees) continue;
+        plotted.add((
+          angle: sample.angle,
+          at: _plot(origin, radius, sample.angle, distance),
+        ));
+      }
+      if (plotted.length < 2) continue;
+      plotted.sort((a, b) => a.angle.compareTo(b.angle));
+
+      final path = Path()..moveTo(plotted.first.at.dx, plotted.first.at.dy);
+      for (final point in plotted.skip(1)) {
+        path.lineTo(point.at.dx, point.at.dy);
+      }
+      canvas.drawPath(path, stroke);
+    }
+  }
+
+  /// Where a reading at [angleDegrees] and [distanceCm] lands on the disc.
+  Offset _plot(
+    Offset origin,
+    double radius,
+    int angleDegrees,
+    int distanceCm,
+  ) {
+    final canvasAngle = RadarView.canvasAngleFor(angleDegrees.toDouble());
+    final fraction = (distanceCm / maxRangeCm).clamp(0.05, 1.0).toDouble();
+    return origin +
+        Offset(math.cos(canvasAngle), math.sin(canvasAngle)) *
+            (radius * fraction);
+  }
+
   void _paintOrigin(Canvas canvas, Offset origin) {
     canvas.drawCircle(origin, 4, Paint()..color = AppColors.textPrimary);
     canvas.drawCircle(
@@ -317,6 +445,7 @@ class _RadarPainter extends CustomPainter {
   bool shouldRepaint(_RadarPainter old) =>
       old.sweepAngle != sweepAngle ||
       !identical(old.samples, samples) ||
+      !identical(old.field, field) ||
       old.maxRangeCm != maxRangeCm ||
       old.cautionCm != cautionCm ||
       old.dangerCm != dangerCm ||

@@ -15,6 +15,7 @@ import '../../widgets/section_header.dart';
 import '../connection/connection_controller.dart';
 import '../drive/drive_controller.dart';
 import '../drive/widgets/emergency_stop_button.dart';
+import '../perception/perception_controller.dart';
 import '../settings/settings_controller.dart';
 import '../telemetry/telemetry_controller.dart';
 import 'auto_behaviour.dart';
@@ -142,6 +143,7 @@ class _AutoBody extends ConsumerWidget {
     final drive = ref.watch(driveProvider);
     final telemetry = ref.watch(telemetryProvider);
     final settings = ref.watch(settingsProvider);
+    final perception = ref.watch(perceptionProvider);
     final vehicleState = telemetry.vehicleState ?? VehicleState.idle;
     final behaviour = AutoBehaviour.of(drive.driveMode, drive.scanMode);
     final isSweeping =
@@ -158,6 +160,7 @@ class _AutoBody extends ConsumerWidget {
             settings: settings,
             size: constraints.maxWidth.clamp(200.0, 340.0),
             isSweeping: isSweeping,
+            perception: perception,
           ),
         ),
       ),
@@ -244,6 +247,7 @@ class _AutoBody extends ConsumerWidget {
                         telemetry: telemetry,
                         settings: settings,
                         vehicleState: vehicleState,
+                        perception: perception,
                       ),
                     ],
                   ),

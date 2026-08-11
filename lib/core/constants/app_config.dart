@@ -92,6 +92,125 @@ abstract final class AppConfig {
   /// Servo sweep positions reported by the radar.
   static const List<int> radarAngles = [0, 45, 90, 135, 180];
 
+  // --- Perception -----------------------------------------------------------
+  //
+  // Tunables for `core/perception/`, which turns raw HC-SR04 frames into a
+  // filtered estimate, a proximity call and a picture of the space ahead. None
+  // of it commands the vehicle: the ESP32 still owns every stop and every
+  // autonomous decision. These values only decide what the app *believes* and
+  // what it shows.
+
+  /// HC-SR04 one-sigma error, as a fixed floor plus a fraction of the range.
+  /// Timing jitter dominates up close; beam spread and temperature drift grow
+  /// with distance, so a single constant under- or over-states one end.
+  static const double sensorNoiseCm = 1.5;
+  static const double sensorNoiseFraction = 0.03;
+
+  /// Half-angle of the sensor cone. A single reading is evidence about this
+  /// whole spread of bearings, not just the one the servo is pointed at.
+  static const double sensorBeamHalfWidthDegrees = 7.5;
+
+  /// One-sigma acceleration the filter should tolerate without lagging, in
+  /// cm/s². Sized for a rover that can go from stationary to full tilt in
+  /// roughly a third of a second.
+  static const double perceptionManoeuvreNoiseCmPerSecondSquared = 200;
+
+  /// Starting velocity uncertainty, one sigma in cm/s. Wide on purpose: the
+  /// first frame says nothing about whether the rover is moving.
+  static const double perceptionInitialVelocitySigma = 120;
+
+  /// Physical ceiling on estimated closing speed, cm/s. Stops a burst of bad
+  /// frames from producing a velocity the vehicle could not achieve.
+  static const double perceptionMaxSpeedCmPerSecond = 300;
+
+  /// A reading further than this many sigmas from the prediction is treated as
+  /// an echo artefact and withheld from the update.
+  static const double perceptionOutlierSigma = 3;
+
+  /// Consecutive rejections after which the filter concedes that the world
+  /// changed rather than the sensor lying, and re-seeds on the new reading.
+  /// Without this a genuine step change — the rover turning to face a wall —
+  /// would be rejected forever.
+  static const int perceptionMaxConsecutiveRejects = 3;
+
+  /// Depth of the rolling residual/echo record behind the confidence score.
+  static const int perceptionWindowSamples = 12;
+
+  /// Updates needed before the filter reports full maturity.
+  static const int perceptionMaturitySamples = 5;
+
+  /// An estimate at a bearing the servo has left behind decays to worthless
+  /// over this window, and the filter re-seeds rather than resuming.
+  static const Duration perceptionBearingStaleAfter = Duration(seconds: 2);
+
+  /// Confidence below which the app declines to make a proximity call at all.
+  static const double perceptionMinConfidence = 0.25;
+
+  /// Closing speeds under this are treated as noise, not approach.
+  static const double perceptionMinClosingCmPerSecond = 3;
+
+  /// Time-to-contact is meaningless beyond this horizon; nothing is reported.
+  static const Duration perceptionMaxTimeToContact = Duration(seconds: 20);
+
+  /// Time-to-contact thresholds. These escalate the proximity call regardless
+  /// of absolute distance: 30cm at a crawl is fine, 30cm at full tilt is not.
+  static const Duration perceptionContactCritical = Duration(milliseconds: 1200);
+  static const Duration perceptionContactWarning = Duration(milliseconds: 2500);
+
+  /// Extra clearance required before the proximity call is allowed to *relax*
+  /// a level. Escalation is never delayed; only recovery is damped, so the
+  /// badge stops flickering when a reading sits on a threshold.
+  static const int perceptionHysteresisCm = 6;
+
+  // --- Perception: the space ahead -----------------------------------------
+
+  /// Chassis width. Sets how far a return has to be enlarged before the gap
+  /// finder will call a bearing traversable.
+  static const int roverWidthCm = 18;
+
+  /// Angular resolution of the gap histogram.
+  static const int perceptionSectorDegrees = 2;
+
+  /// A gap wider than this is steered into near its edge rather than its
+  /// centre, so the rover hugs the opening it is aiming for instead of
+  /// wandering to the middle of a wide-open room.
+  static const int perceptionWideGapDegrees = 40;
+
+  /// How much a degree of extra width is worth against a degree of deviation
+  /// from dead ahead when ranking gaps.
+  static const double perceptionGapWidthWeight = 0.25;
+
+  /// Floor on gap width, so a sliver between two enlarged returns is never
+  /// offered as a route.
+  static const int perceptionMinGapDegrees = 10;
+
+  /// Radar samples older than this are dropped from the field analysis. A
+  /// sweep takes a couple of seconds; anything older describes where the rover
+  /// used to be.
+  static const Duration perceptionSampleTtl = Duration(seconds: 4);
+
+  /// Max perpendicular deviation, as a floor plus a fraction of mean range,
+  /// for a run of returns to still read as one flat surface.
+  static const double perceptionStraightnessCm = 6;
+  static const double perceptionStraightnessFraction = 0.06;
+
+  /// Angle between two adjacent flat runs for them to read as a corner rather
+  /// than as one wall or two unrelated surfaces.
+  static const double perceptionCornerMinDegrees = 25;
+
+  /// Cartesian extent under which a one- or two-point return reads as a
+  /// discrete object rather than part of a surface.
+  static const double perceptionObjectMaxWidthCm = 30;
+
+  /// Worst incidence angle assumed when deciding whether a depth step between
+  /// neighbouring returns is a real discontinuity. The test only works while
+  /// the sweep is finer than this, which the stock five-angle sweep is not.
+  static const double perceptionWorstIncidenceDegrees = 40;
+
+  /// Angular spacing above which returns are too far apart to be assumed to
+  /// share a surface, so discontinuity splitting is skipped.
+  static const double perceptionFineSweepMaxSpacingDegrees = 12;
+
   // --- Mock mode ------------------------------------------------------------
 
   static const Duration mockTelemetryInterval = Duration(milliseconds: 200);

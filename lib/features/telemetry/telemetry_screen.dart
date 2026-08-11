@@ -7,6 +7,7 @@ import 'package:go_router/go_router.dart';
 import 'package:share_plus/share_plus.dart';
 
 import '../../core/layout/breakpoints.dart';
+import '../../core/perception/perception_engine.dart';
 import '../../core/providers/app_providers.dart';
 import '../../core/router/app_router.dart';
 import '../../core/theme/app_theme.dart';
@@ -26,6 +27,7 @@ import '../../widgets/feature_placeholder.dart';
 import '../../widgets/section_header.dart';
 import '../../widgets/telemetry_card.dart';
 import '../connection/connection_controller.dart';
+import '../perception/perception_controller.dart';
 import '../settings/settings_controller.dart';
 import 'telemetry_controller.dart';
 import 'telemetry_history.dart';
@@ -84,6 +86,7 @@ class _TelemetryScreenState extends ConsumerState<TelemetryScreen> {
     final link = ref.watch(connectionProvider);
     final telemetry = ref.watch(telemetryProvider);
     final settings = ref.watch(settingsProvider);
+    final perception = ref.watch(perceptionProvider);
     final history = ref.watch(telemetryHistoryProvider);
     final lastAck = ref.watch(lastAckProvider);
     final error = ref.watch(vehicleErrorProvider);
@@ -128,6 +131,7 @@ class _TelemetryScreenState extends ConsumerState<TelemetryScreen> {
                 telemetry: telemetry,
                 settings: settings,
                 link: link,
+                perception: perception,
                 history: history,
                 lastAck: lastAck,
                 error: error,
@@ -144,6 +148,7 @@ class _TelemetryBody extends StatelessWidget {
     required this.telemetry,
     required this.settings,
     required this.link,
+    required this.perception,
     required this.history,
     required this.lastAck,
     required this.error,
@@ -153,6 +158,7 @@ class _TelemetryBody extends StatelessWidget {
   final Telemetry telemetry;
   final AppSettings settings;
   final LinkState link;
+  final PerceptionSnapshot perception;
   final TelemetryHistory history;
   final CommandAck? lastAck;
   final RoverError? error;
@@ -161,7 +167,9 @@ class _TelemetryBody extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final isStale = telemetry.isStale();
-    final distanceStatus = telemetry.distanceStatus(
+    final proximity = perception.hasData ? perception.proximity : null;
+    final filteredDistance = proximity?.distanceCm;
+    final rawDistanceStatus = telemetry.distanceStatus(
       cautionCm: settings.cautionDistanceCm,
       dangerCm: settings.dangerDistanceCm,
     );
@@ -276,13 +284,29 @@ class _TelemetryBody extends StatelessWidget {
                 _MetricGrid(
                   children: [
                     TelemetryCard(
-                      label: 'FRONT DISTANCE',
-                      value: settings.units.format(telemetry.distanceCm),
-                      numericValue: telemetry.distanceCm?.toDouble(),
+                      label: 'FILTERED FRONT',
+                      value: filteredDistance == null
+                          ? settings.units.format(telemetry.distanceCm)
+                          : settings.units.format(filteredDistance.round()),
+                      numericValue:
+                          filteredDistance ?? telemetry.distanceCm?.toDouble(),
                       unit: settings.units.shortLabel,
                       icon: Icons.straighten_rounded,
-                      level: distanceStatus.level,
-                      statusLabel: distanceStatus.label,
+                      level: proximity?.level ?? rawDistanceStatus.level,
+                      statusLabel: proximity?.headline ?? rawDistanceStatus.label,
+                      isStale: isStale,
+                    ),
+                    TelemetryCard(
+                      label: 'SENSOR CONFIDENCE',
+                      value: proximity?.confidence.label ?? 'NO DATA',
+                      icon: Icons.verified_rounded,
+                      level: perception.isUncertain
+                          ? StatusLevel.caution
+                          : (proximity?.confidence.isTrustworthy ?? false)
+                          ? StatusLevel.good
+                          : StatusLevel.neutral,
+                      statusLabel:
+                          proximity?.detail ?? 'Waiting for filtered readings',
                       isStale: isStale,
                     ),
                     TelemetryCard(
