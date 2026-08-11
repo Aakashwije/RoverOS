@@ -6,6 +6,7 @@ import '../../features/auto/auto_screen.dart';
 import '../../features/connection/connection_screen.dart';
 import '../../features/drive/drive_screen.dart';
 import '../../features/home/home_screen.dart';
+import '../../features/onboarding/onboarding_screen.dart';
 import '../../features/settings/settings_screen.dart';
 import '../../features/splash/splash_screen.dart';
 import '../../features/telemetry/telemetry_screen.dart';
@@ -14,14 +15,17 @@ import '../../widgets/rover_shell.dart';
 /// Route paths. Screens never write a literal path string.
 abstract final class AppRoute {
   static const String splash = '/';
+  static const String onboarding = '/welcome';
+
+  // Shell branches, in tab order.
   static const String home = '/home';
+  static const String telemetry = '/telemetry';
   static const String auto = '/auto';
   static const String settings = '/settings';
 
   /// Presented over the shell — the drive HUD owns the whole screen.
   static const String drive = '/drive';
   static const String connect = '/connect';
-  static const String telemetry = '/telemetry';
 }
 
 final rootNavigatorKey = GlobalKey<NavigatorState>(debugLabel: 'root');
@@ -74,9 +78,8 @@ final appRouterProvider = Provider<GoRouter>((ref) {
             _verticalPage(const DriveScreen(), state),
       ),
       GoRoute(
-        path: AppRoute.telemetry,
-        pageBuilder: (context, state) =>
-            _verticalPage(const TelemetryScreen(), state),
+        path: AppRoute.onboarding,
+        builder: (context, state) => const OnboardingScreen(),
       ),
       StatefulShellRoute.indexedStack(
         parentNavigatorKey: rootNavigatorKey,
@@ -89,6 +92,18 @@ final appRouterProvider = Provider<GoRouter>((ref) {
               GoRoute(
                 path: AppRoute.home,
                 builder: (context, state) => const HomeScreen(),
+              ),
+            ],
+          ),
+          // Telemetry is a branch rather than a pushed page: it is where the
+          // user goes to *watch* the vehicle, often for minutes at a time, and
+          // a pushed route would lose its scroll position every time they
+          // stepped away to check something else.
+          StatefulShellBranch(
+            routes: [
+              GoRoute(
+                path: AppRoute.telemetry,
+                builder: (context, state) => const TelemetryScreen(),
               ),
             ],
           ),

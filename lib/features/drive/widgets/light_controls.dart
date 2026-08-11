@@ -16,6 +16,7 @@ class LightControls extends StatelessWidget {
     required this.onChanged,
     this.enabled = true,
     this.compact = false,
+    this.visibleModes,
   });
 
   final LightMode mode;
@@ -24,6 +25,12 @@ class LightControls extends StatelessWidget {
 
   /// Icon-only row for the Drive HUD; the labelled layout is for sheets.
   final bool compact;
+
+  /// Restricts the row to a subset. The drive HUD shows three, because five
+  /// 48dp buttons plus a horn plus the emergency-stop zone do not fit across a
+  /// narrow landscape phone — and the two flash rates are a sheet-level
+  /// decision, not something reached for mid-drive.
+  final List<LightMode>? visibleModes;
 
   static const List<({LightMode mode, IconData icon, String label})> _modes = [
     (mode: LightMode.off, icon: Icons.light_mode_outlined, label: 'OFF'),
@@ -37,17 +44,25 @@ class LightControls extends StatelessWidget {
     ),
   ];
 
+  List<({LightMode mode, IconData icon, String label})> get _visible {
+    final allowed = visibleModes;
+    if (allowed == null) return _modes;
+    return _modes.where((entry) => allowed.contains(entry.mode)).toList();
+  }
+
   @override
   Widget build(BuildContext context) {
+    final entries = _visible;
+
     if (compact) {
       return Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          for (final entry in _modes) ...[
+          for (final entry in entries) ...[
             AppIconButton(
               icon: entry.icon,
               semanticLabel: 'Headlights ${entry.label}',
-              tooltip: entry.label,
+              tooltip: 'Headlights ${entry.label}',
               size: 48,
               isActive: entry.mode == mode,
               activeColor: entry.mode == LightMode.hazard
@@ -55,7 +70,7 @@ class LightControls extends StatelessWidget {
                   : AppColors.headlight,
               onPressed: enabled ? () => onChanged(entry.mode) : null,
             ),
-            if (entry != _modes.last) const SizedBox(width: AppSpacing.sm),
+            if (entry != entries.last) const SizedBox(width: AppSpacing.sm),
           ],
         ],
       );
@@ -65,7 +80,7 @@ class LightControls extends StatelessWidget {
       spacing: AppSpacing.sm,
       runSpacing: AppSpacing.sm,
       children: [
-        for (final entry in _modes)
+        for (final entry in entries)
           _LightModeChip(
             icon: entry.icon,
             label: entry.label,

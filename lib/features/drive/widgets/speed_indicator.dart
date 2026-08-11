@@ -14,6 +14,7 @@ class SpeedIndicator extends StatelessWidget {
     required this.output,
     this.size = 190,
     this.isStopped = false,
+    this.showMotorBars = true,
   });
 
   /// Commanded ceiling, 0–100.
@@ -25,10 +26,15 @@ class SpeedIndicator extends StatelessWidget {
   final double size;
   final bool isStopped;
 
+  /// The drive HUD turns these off: it carries a larger left/right readout
+  /// under the joystick, and showing the same two numbers twice on one screen
+  /// just splits the driver's attention.
+  final bool showMotorBars;
+
   @override
   Widget build(BuildContext context) {
     final direction = MotorMath.directionOf(output);
-    final color = isStopped ? AppColors.emergency : AppColors.accent;
+    final color = isStopped ? AppColors.emergencyLight : AppColors.accent;
 
     return Column(
       mainAxisSize: MainAxisSize.min,
@@ -57,7 +63,7 @@ class SpeedIndicator extends StatelessWidget {
                       style: AppTypography.displayValue.copyWith(
                         fontSize: size * 0.24,
                         color: isStopped
-                            ? AppColors.emergency
+                            ? AppColors.emergencyLight
                             : AppColors.textPrimary,
                       ),
                     ),
@@ -78,8 +84,10 @@ class SpeedIndicator extends StatelessWidget {
             ],
           ),
         ),
-        const SizedBox(height: AppSpacing.lg),
-        _MotorBars(output: output),
+        if (showMotorBars) ...[
+          const SizedBox(height: AppSpacing.lg),
+          _MotorBars(output: output),
+        ],
       ],
     );
   }
@@ -108,7 +116,7 @@ class _DirectionChip extends StatelessWidget {
   Widget build(BuildContext context) {
     final label = isStopped ? 'E-STOP' : direction.label;
     final color = isStopped
-        ? AppColors.emergency
+        ? AppColors.emergencyLight
         : direction == DriveDirection.idle
         ? AppColors.textTertiary
         : AppColors.accent;

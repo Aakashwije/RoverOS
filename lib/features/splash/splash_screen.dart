@@ -64,6 +64,7 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
     // 2. Saved vehicle.
     final storage = ref.read(storageServiceProvider);
     final remembered = storage.loadVehicle();
+    final isOnboarded = storage.loadOnboardingComplete();
     await _advance(BootStep.permissions);
 
     // 3 & 4. Permission state and auto-reconnect are owned by the connection
@@ -77,7 +78,7 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
     if (remaining > Duration.zero) await Future<void>.delayed(remaining);
 
     if (!mounted) return;
-    context.go(AppRoute.home);
+    context.go(isOnboarded ? AppRoute.home : AppRoute.onboarding);
   }
 
   Future<void> _advance(BootStep next) async {
@@ -99,42 +100,131 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
           ),
         ),
         child: SafeArea(
-          child: Column(
+          child: Stack(
             children: [
-              const Spacer(flex: 3),
-              _FadeUp(
-                controller: _controller,
-                start: 0,
-                end: 0.45,
-                child: const RoverMark(size: 148),
-              ),
-              const SizedBox(height: AppSpacing.xxxl),
-              _FadeUp(
-                controller: _controller,
-                start: 0.25,
-                end: 0.7,
-                child: const Text(
-                  AppConfig.appName,
-                  style: AppTypography.wordmark,
+              // A slow cyan bloom behind the mark, timed to the draw-in. It is
+              // the only thing on screen that keeps moving once the logo has
+              // settled, which is what stops a splash held open by slow
+              // storage from looking like a frozen app.
+              Positioned.fill(
+                child: IgnorePointer(
+                  child: _AccentBloom(controller: _controller),
                 ),
               ),
-              const SizedBox(height: AppSpacing.md),
-              _FadeUp(
-                controller: _controller,
-                start: 0.4,
-                end: 0.85,
-                child: const Text(
-                  AppConfig.tagline,
-                  style: AppTypography.wordmarkSub,
-                ),
+              Column(
+                children: [
+                  const Spacer(flex: 3),
+                  _FadeUp(
+                    controller: _controller,
+                    start: 0,
+                    end: 0.45,
+                    child: const RoverMark(size: 148),
+                  ),
+                  const SizedBox(height: AppSpacing.xxxl),
+                  _FadeUp(
+                    controller: _controller,
+                    start: 0.25,
+                    end: 0.7,
+                    // The wordmark's letter-spacing opens as it arrives, so
+                    // the name resolves rather than simply appearing.
+                    child: _SpacedWordmark(controller: _controller),
+                  ),
+                  const SizedBox(height: AppSpacing.md),
+                  _FadeUp(
+                    controller: _controller,
+                    start: 0.4,
+                    end: 0.85,
+                    child: const Text(
+                      AppConfig.tagline,
+                      style: AppTypography.wordmarkSub,
+                    ),
+                  ),
+                  const Spacer(flex: 4),
+                  _BootStatus(step: _step, controller: _controller),
+                  const SizedBox(height: AppSpacing.huge),
+                ],
               ),
-              const Spacer(flex: 4),
-              _BootStatus(step: _step, controller: _controller),
-              const SizedBox(height: AppSpacing.huge),
             ],
           ),
         ),
       ),
+    );
+  }
+}
+
+/// Soft accent glow behind the mark, which keeps breathing after the intro has
+/// finished so a slow boot never reads as a hung one.
+class _AccentBloom extends StatefulWidget {
+  const _AccentBloom({required this.controller});
+
+  final AnimationController controller;
+
+  @override
+  State<_AccentBloom> createState() => _AccentBloomState();
+}
+
+class _AccentBloomState extends State<_AccentBloom>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _breath = AnimationController(
+    vsync: this,
+    duration: const Duration(milliseconds: 2600),
+  )..repeat(reverse: true);
+
+  @override
+  void dispose() {
+    _breath.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AnimatedBuilder(
+      animation: Listenable.merge([widget.controller, _breath]),
+      builder: (context, _) {
+        final entrance = Curves.easeOutCubic.transform(
+          widget.controller.value.clamp(0.0, 1.0),
+        );
+        final pulse = 0.55 + 0.45 * Curves.easeInOut.transform(_breath.value);
+
+        return DecoratedBox(
+          decoration: BoxDecoration(
+            gradient: RadialGradient(
+              // Sits over the mark, which the column places above centre.
+              center: const Alignment(0, -0.42),
+              radius: 0.34 + 0.06 * pulse,
+              colors: [
+                AppColors.accent.withValues(alpha: 0.10 * entrance * pulse),
+                AppColors.accent.withValues(alpha: 0),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+}
+
+/// Wordmark whose tracking opens as it fades in.
+class _SpacedWordmark extends StatelessWidget {
+  const _SpacedWordmark({required this.controller});
+
+  final AnimationController controller;
+
+  @override
+  Widget build(BuildContext context) {
+    return AnimatedBuilder(
+      animation: controller,
+      builder: (context, _) {
+        final t = Curves.easeOutCubic.transform(
+          const Interval(0.25, 0.9).transform(controller.value.clamp(0.0, 1.0)),
+        );
+        return Text(
+          AppConfig.appName,
+          style: AppTypography.wordmark.copyWith(
+            letterSpacing: 2 + 4 * t,
+          ),
+        );
+      },
     );
   }
 }

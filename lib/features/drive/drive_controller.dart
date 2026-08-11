@@ -1,10 +1,12 @@
 import 'dart:async';
 
 import 'package:flutter/foundation.dart';
+import 'package:flutter/material.dart' show IconData, Icons;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/constants/app_config.dart';
 import '../../core/providers/app_providers.dart';
+import '../../core/theme/app_colors.dart';
 import '../../core/utils/motor_math.dart';
 import '../../models/commands.dart';
 import '../../models/vehicle.dart';
@@ -12,6 +14,38 @@ import '../../services/car_protocol.dart';
 import '../../services/transport/transport.dart';
 import '../connection/connection_controller.dart';
 import '../settings/settings_controller.dart';
+
+/// Whether the vehicle will move if the stick moves, in one word.
+///
+/// The drive HUD had three separate tells for this — a greyed joystick, a red
+/// gauge, a latched stop button — and none of them said it outright. A driver
+/// glancing down needs the answer, not the evidence.
+enum DriveArmState {
+  /// Input accepted, motors idle.
+  ready('READY', 'Input accepted. The vehicle is stationary.', StatusLevel.neutral),
+
+  /// The stick is held or the motors are turning.
+  armed('ARMED', 'The vehicle is under power.', StatusLevel.good),
+
+  /// Emergency stop is latched; input is refused until it is released.
+  stopped('STOPPED', 'Emergency stop latched. Release it to drive.', StatusLevel.danger),
+
+  /// Firmware is driving; the joystick is deliberately inert.
+  autonomous('AUTONOMOUS', 'The vehicle is driving itself.', StatusLevel.info);
+
+  const DriveArmState(this.label, this.description, this.level);
+
+  final String label;
+  final String description;
+  final StatusLevel level;
+
+  IconData get icon => switch (this) {
+    ready => Icons.pause_circle_outline_rounded,
+    armed => Icons.bolt_rounded,
+    stopped => Icons.pan_tool_rounded,
+    autonomous => Icons.auto_mode_rounded,
+  };
+}
 
 /// What the app is currently commanding.
 ///
@@ -53,6 +87,16 @@ class DriveState {
 
   /// Whether drive input should be accepted at all.
   bool get acceptsInput => !isEmergencyStopped && !driveMode.isAutonomous;
+
+  /// Ordered by what overrides what: the emergency latch beats every other
+  /// state, and an autonomous mode beats a stick that is being held but
+  /// ignored.
+  DriveArmState get armState {
+    if (isEmergencyStopped) return DriveArmState.stopped;
+    if (driveMode.isAutonomous) return DriveArmState.autonomous;
+    if (isEngaged || isMoving) return DriveArmState.armed;
+    return DriveArmState.ready;
+  }
 
   DriveState copyWith({
     MotorOutput? output,

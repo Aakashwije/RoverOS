@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../../core/theme/app_theme.dart';
+import '../../../core/utils/formatters.dart';
 import '../../../models/vehicle.dart';
 import '../../../widgets/app_button.dart';
 import '../../../widgets/app_card.dart';
@@ -39,7 +40,9 @@ class DeviceTile extends StatelessWidget {
       child: AppCard(
         accent: vehicle.looksLikeRover ? AppColors.accent : null,
         semanticLabel:
-            '${vehicle.displayName}. $_statusLabel. Signal ${vehicle.signal.label}',
+            '${vehicle.displayName}. $_statusLabel. '
+            'Signal ${vehicle.signal.label}. '
+            '${formatLastSeen(vehicle.lastSeen)}',
         child: Row(
           children: [
             Container(
@@ -97,7 +100,28 @@ class DeviceTile extends StatelessWidget {
                       ),
                       const SizedBox(width: AppSpacing.sm),
                       SignalBars(quality: vehicle.signal, height: 11),
+                      if (vehicle.rssi != null) ...[
+                        const SizedBox(width: 5),
+                        Text(
+                          '${vehicle.rssi} dBm',
+                          style: AppTypography.label.copyWith(fontSize: 9),
+                        ),
+                      ],
                     ],
+                  ),
+                  const SizedBox(height: 2),
+                  // Freshness matters more than it looks: two rovers on a
+                  // bench advertise identically, and "seen 14s ago" is often
+                  // the only thing separating the one that is powered on from
+                  // the one whose advert is still cached.
+                  Text(
+                    formatLastSeen(vehicle.lastSeen),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: AppTypography.label.copyWith(
+                      fontSize: 9,
+                      color: AppColors.textTertiary,
+                    ),
                   ),
                 ],
               ),

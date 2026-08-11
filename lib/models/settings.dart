@@ -24,6 +24,27 @@ enum DistanceUnits {
       values.firstWhere((u) => u.name == name, orElse: () => metric);
 }
 
+/// Which side of the landscape drive HUD carries the joystick.
+///
+/// One-handed driving is common — the other hand is holding the rover, a
+/// charger, or nothing at all — and which thumb is free is not something the
+/// app can guess. Mirroring the whole HUD is cheaper than asking the user to
+/// adapt.
+enum JoystickSide {
+  left('LEFT', 'Joystick left, sensors right'),
+  right('RIGHT', 'Joystick right, sensors left');
+
+  const JoystickSide(this.label, this.description);
+
+  final String label;
+  final String description;
+
+  JoystickSide get opposite => this == left ? right : left;
+
+  static JoystickSide fromName(String? name) =>
+      values.firstWhere((s) => s.name == name, orElse: () => left);
+}
+
 /// How quickly the ESP32 alternates the headlights in a flash mode.
 enum FlashSpeed {
   slow('SLOW', LightMode.flashSlow),
@@ -55,6 +76,7 @@ class AppSettings {
     this.accelerationRate = 400,
     this.decelerationRate = 700,
     this.hapticsEnabled = true,
+    this.joystickSide = JoystickSide.left,
     // MOTORS
     this.invertLeftMotor = false,
     this.invertRightMotor = false,
@@ -101,6 +123,9 @@ class AppSettings {
   final double accelerationRate;
   final double decelerationRate;
   final bool hapticsEnabled;
+
+  /// Which side of the drive HUD the joystick sits on.
+  final JoystickSide joystickSide;
 
   // MOTORS
   final bool invertLeftMotor;
@@ -169,6 +194,7 @@ class AppSettings {
       accelerationRate: Validators.rampRate(accelerationRate),
       decelerationRate: Validators.rampRate(decelerationRate),
       hapticsEnabled: hapticsEnabled,
+      joystickSide: joystickSide,
       invertLeftMotor: invertLeftMotor,
       invertRightMotor: invertRightMotor,
       leftMotorTrim: Validators.motorTrim(leftMotorTrim),
@@ -199,6 +225,7 @@ class AppSettings {
     double? accelerationRate,
     double? decelerationRate,
     bool? hapticsEnabled,
+    JoystickSide? joystickSide,
     bool? invertLeftMotor,
     bool? invertRightMotor,
     int? leftMotorTrim,
@@ -227,6 +254,7 @@ class AppSettings {
       accelerationRate: accelerationRate ?? this.accelerationRate,
       decelerationRate: decelerationRate ?? this.decelerationRate,
       hapticsEnabled: hapticsEnabled ?? this.hapticsEnabled,
+      joystickSide: joystickSide ?? this.joystickSide,
       invertLeftMotor: invertLeftMotor ?? this.invertLeftMotor,
       invertRightMotor: invertRightMotor ?? this.invertRightMotor,
       leftMotorTrim: leftMotorTrim ?? this.leftMotorTrim,
@@ -258,6 +286,7 @@ class AppSettings {
     'accelerationRate': accelerationRate,
     'decelerationRate': decelerationRate,
     'hapticsEnabled': hapticsEnabled,
+    'joystickSide': joystickSide.name,
     'invertLeftMotor': invertLeftMotor,
     'invertRightMotor': invertRightMotor,
     'leftMotorTrim': leftMotorTrim,
@@ -314,6 +343,7 @@ class AppSettings {
       accelerationRate: pickDouble('accelerationRate', d.accelerationRate),
       decelerationRate: pickDouble('decelerationRate', d.decelerationRate),
       hapticsEnabled: pick('hapticsEnabled', d.hapticsEnabled),
+      joystickSide: JoystickSide.fromName(json['joystickSide'] as String?),
       invertLeftMotor: pick('invertLeftMotor', d.invertLeftMotor),
       invertRightMotor: pick('invertRightMotor', d.invertRightMotor),
       leftMotorTrim: pickInt('leftMotorTrim', d.leftMotorTrim),

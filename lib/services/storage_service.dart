@@ -18,6 +18,7 @@ class StorageService {
   static const String _keySettings = 'roveros.settings.v1';
   static const String _keyVehicle = 'roveros.vehicle.v1';
   static const String _keyActivity = 'roveros.activity.v1';
+  static const String _keyOnboarded = 'roveros.onboarded.v1';
 
   /// Recent-activity feed length. Older entries are discarded.
   static const int _maxActivityEntries = 20;
@@ -66,6 +67,18 @@ class StorageService {
       _prefs.setString(_keyVehicle, jsonEncode(vehicle.toJson()));
 
   Future<bool> forgetVehicle() => _prefs.remove(_keyVehicle);
+
+  // --- First run ------------------------------------------------------------
+
+  /// Whether the setup guide has been completed at least once.
+  ///
+  /// Kept out of [AppSettings] deliberately: it is a fact about this install,
+  /// not a preference, and "reset all settings" must not resurrect the guide
+  /// for someone who has already been driving for a month.
+  bool loadOnboardingComplete() => _prefs.getBool(_keyOnboarded) ?? false;
+
+  Future<bool> setOnboardingComplete({bool complete = true}) =>
+      _prefs.setBool(_keyOnboarded, complete);
 
   // --- Activity feed --------------------------------------------------------
 
@@ -119,12 +132,14 @@ class StorageService {
     }
   }
 
-  /// Wipes every ROVEROS key. Used by "reset to defaults" in Settings.
+  /// Wipes every ROVEROS key, including the first-run flag — this is a full
+  /// factory reset, not the settings-only one offered in the UI.
   Future<void> clearAll() async {
     await Future.wait([
       _prefs.remove(_keySettings),
       _prefs.remove(_keyVehicle),
       _prefs.remove(_keyActivity),
+      _prefs.remove(_keyOnboarded),
     ]);
   }
 }

@@ -2,19 +2,24 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../core/layout/breakpoints.dart';
 import '../../core/router/app_router.dart';
 import '../../core/theme/app_theme.dart';
 import '../../models/commands.dart';
-import '../../widgets/app_button.dart';
+import '../../services/haptics.dart';
 import '../../widgets/app_card.dart';
 import '../../widgets/app_modal.dart';
+import '../../widgets/app_segmented_control.dart';
 import '../../widgets/feature_placeholder.dart';
 import '../../widgets/section_header.dart';
 import '../connection/connection_controller.dart';
 import '../drive/drive_controller.dart';
+import '../drive/widgets/emergency_stop_button.dart';
 import '../settings/settings_controller.dart';
 import '../telemetry/telemetry_controller.dart';
+import 'auto_behaviour.dart';
 import 'widgets/auto_status_panel.dart';
+import 'widgets/decision_readout.dart';
 import 'widgets/radar_view.dart';
 import 'widgets/servo_control.dart';
 
@@ -45,6 +50,7 @@ class _AutoScreenState extends ConsumerState<AutoScreen> {
     return Scaffold(
       backgroundColor: AppColors.background,
       appBar: AppBar(
+        automaticallyImplyLeading: false,
         title: const Text('AUTONOMOUS', style: AppTypography.labelStrong),
       ),
       body: SafeArea(
@@ -68,30 +74,47 @@ class _AutoScreenState extends ConsumerState<AutoScreen> {
 class _AutoBody extends ConsumerWidget {
   const _AutoBody();
 
-  Future<void> _requestObstacleAvoidance(
+  Future<void> _select(
     BuildContext context,
     WidgetRef ref,
+    AutoBehaviour behaviour,
   ) async {
-    final confirmed = await AppModal.confirm(
-      context,
-      title: 'Start autonomous driving?',
-      message:
-          'The vehicle will drive itself using onboard obstacle avoidance. Keep '
-          'it in view and stay ready to press STOP.',
-      confirmLabel: 'START',
-      level: StatusLevel.caution,
-      icon: Icons.auto_mode_rounded,
-    );
-    if (!confirmed) return;
-    await ref
-        .read(driveProvider.notifier)
-        .setDriveMode(DriveMode.obstacleAvoidance);
+    final controller = ref.read(driveProvider.notifier);
+    Haptics.selection(enabled: ref.read(settingsProvider).hapticsEnabled);
+
+    switch (behaviour) {
+      case AutoBehaviour.manual:
+        await _standDown(ref);
+
+      case AutoBehaviour.avoid:
+        final confirmed = await AppModal.confirm(
+          context,
+          title: 'Start autonomous driving?',
+          message:
+              'The vehicle will drive itself using onboard obstacle avoidance. '
+              'Keep it in view and stay ready to press STOP.',
+          confirmLabel: 'START',
+          level: StatusLevel.caution,
+          icon: Icons.auto_mode_rounded,
+        );
+        if (!confirmed) return;
+        await controller.setDriveMode(DriveMode.obstacleAvoidance);
+
+      case AutoBehaviour.scan:
+        // Scanning sweeps the servo with the chassis still, so any driving
+        // behaviour has to be handed back first.
+        await controller.setDriveMode(DriveMode.manual);
+        controller.setScanMode(ScanMode.auto);
+    }
   }
 
-  Future<void> _stopEverything(WidgetRef ref) async {
+  /// The single "everything off" path, shared by the segmented control and the
+  /// persistent stop button so they cannot leave different residue behind.
+  Future<void> _standDown(WidgetRef ref) async {
     final controller = ref.read(driveProvider.notifier);
     await controller.setDriveMode(DriveMode.manual);
     controller.setScanMode(ScanMode.off);
+    await controller.stop(reason: 'Autonomous stop');
   }
 
   @override
@@ -100,255 +123,190 @@ class _AutoBody extends ConsumerWidget {
     final telemetry = ref.watch(telemetryProvider);
     final settings = ref.watch(settingsProvider);
     final vehicleState = telemetry.vehicleState ?? VehicleState.idle;
-    final isAvoiding = drive.driveMode == DriveMode.obstacleAvoidance;
-    final isScanning = drive.scanMode == ScanMode.auto;
+    final behaviour = AutoBehaviour.of(drive.driveMode, drive.scanMode);
+    final isSweeping =
+        behaviour == AutoBehaviour.scan || behaviour == AutoBehaviour.avoid;
 
-    return ListView(
-      padding: const EdgeInsets.fromLTRB(
-        AppSpacing.lg,
-        AppSpacing.sm,
-        AppSpacing.lg,
-        AppSpacing.xxxl,
+    final radar = AppCard(
+      child: Center(
+        // Sized from the card's own available width so it never overflows
+        // on a narrow phone, and never grows past a sensible cap on a
+        // tablet.
+        child: LayoutBuilder(
+          builder: (context, constraints) => RadarView(
+            telemetry: telemetry,
+            settings: settings,
+            size: constraints.maxWidth.clamp(200.0, 340.0),
+            isSweeping: isSweeping,
+          ),
+        ),
       ),
-      children: [
-        const SectionHeader(title: 'BEHAVIOUR', icon: Icons.tune_rounded),
-        _ModeSelector(
-          driveMode: drive.driveMode,
-          isScanning: isScanning,
-          onManual: () => _stopEverything(ref),
-          onObstacleAvoidance: () => _requestObstacleAvoidance(context, ref),
-          onAutoScan: () {
-            ref
-                .read(driveProvider.notifier)
-                .setScanMode(isScanning ? ScanMode.off : ScanMode.auto);
-          },
-        ),
-        const SizedBox(height: AppSpacing.xxl),
-        AutoStatusPanel(
-          telemetry: telemetry,
-          settings: settings,
-          vehicleState: vehicleState,
-        ),
-        const SizedBox(height: AppSpacing.xxl),
-        const SectionHeader(title: 'RADAR', icon: Icons.radar_rounded),
-        AppCard(
-          child: Center(
-            // Sized from the card's own available width so it never overflows
-            // on a narrow phone, and never grows past a sensible cap on a
-            // tablet.
-            child: LayoutBuilder(
-              builder: (context, constraints) => RadarView(
-                telemetry: telemetry,
-                settings: settings,
-                size: constraints.maxWidth.clamp(200.0, 340.0),
-              ),
-            ),
-          ),
-        ),
-        const SizedBox(height: AppSpacing.xxl),
-        const SectionHeader(
-          title: 'SERVO',
-          icon: Icons.rotate_right_rounded,
-          subtitle: 'Manual control is available only in MANUAL mode',
-        ),
-        AppCard(
-          child: ServoControl(
-            currentAngle: telemetry.servoAngle ?? 90,
-            scanMode: drive.scanMode,
-            enabled: drive.driveMode == DriveMode.manual,
-            onAngleChanged: (angle) =>
-                ref.read(driveProvider.notifier).setServoAngle(angle),
-            onScanModeChanged: (mode) =>
-                ref.read(driveProvider.notifier).setScanMode(mode),
-          ),
-        ),
-        const SizedBox(height: AppSpacing.xxl),
-        Row(
-          children: [
-            Expanded(
-              child: AppButton(
-                label: 'START',
-                icon: Icons.play_arrow_rounded,
-                onPressed: isAvoiding
-                    ? null
-                    : () => _requestObstacleAvoidance(context, ref),
-              ),
-            ),
-            const SizedBox(width: AppSpacing.md),
-            Expanded(
-              child: AppButton(
-                label: 'PAUSE',
-                icon: Icons.pause_rounded,
-                variant: AppButtonVariant.secondary,
-                onPressed: isAvoiding
-                    ? () => ref
-                          .read(driveProvider.notifier)
-                          .setDriveMode(DriveMode.manual)
-                    : null,
-              ),
-            ),
-            const SizedBox(width: AppSpacing.md),
-            Expanded(
-              child: AppButton(
-                label: 'STOP',
-                icon: Icons.stop_rounded,
-                variant: AppButtonVariant.danger,
-                onPressed: (isAvoiding || isScanning)
-                    ? () => _stopEverything(ref)
-                    : null,
-              ),
-            ),
-          ],
-        ),
-      ],
     );
-  }
-}
 
-class _ModeSelector extends StatelessWidget {
-  const _ModeSelector({
-    required this.driveMode,
-    required this.isScanning,
-    required this.onManual,
-    required this.onObstacleAvoidance,
-    required this.onAutoScan,
-  });
-
-  final DriveMode driveMode;
-  final bool isScanning;
-  final VoidCallback onManual;
-  final VoidCallback onObstacleAvoidance;
-  final VoidCallback onAutoScan;
-
-  @override
-  Widget build(BuildContext context) {
     return Column(
       children: [
-        _ModeCard(
-          title: 'MANUAL',
-          description: 'You are driving. Autonomous behaviours are off.',
-          icon: Icons.sports_esports_rounded,
-          isActive: driveMode == DriveMode.manual && !isScanning,
-          onTap: onManual,
+        Expanded(
+          child: PageConstraints(
+            child: ListView(
+              padding: const EdgeInsets.fromLTRB(
+                AppSpacing.lg,
+                AppSpacing.sm,
+                AppSpacing.lg,
+                AppSpacing.lg,
+              ),
+              children: [
+                DecisionReadout(
+                  telemetry: telemetry,
+                  behaviour: behaviour,
+                  vehicleState: vehicleState,
+                ),
+                const SizedBox(height: AppSpacing.lg),
+                AppSegmentedControl<AutoBehaviour>(
+                  value: behaviour,
+                  accent: AppColors.info,
+                  options: [
+                    for (final option in AutoBehaviour.values)
+                      SegmentOption(
+                        value: option,
+                        label: option.label,
+                        icon: option.icon,
+                        semanticHint: option.requiresConfirmation
+                            ? '${option.description} Requires confirmation.'
+                            : option.description,
+                      ),
+                  ],
+                  onChanged: (value) => _select(context, ref, value),
+                ),
+                const SizedBox(height: AppSpacing.sm),
+                Text(
+                  behaviour.description,
+                  textAlign: TextAlign.center,
+                  style: AppTypography.bodySmall.copyWith(fontSize: 12),
+                ),
+                const SizedBox(height: AppSpacing.xxl),
+                TwoPane(
+                  primaryFlex: 1,
+                  secondaryFlex: 1,
+                  primary: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const SectionHeader(
+                        title: 'RADAR',
+                        icon: Icons.radar_rounded,
+                      ),
+                      radar,
+                    ],
+                  ),
+                  secondary: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const SectionHeader(
+                        title: 'CLEARANCE',
+                        icon: Icons.sensors_rounded,
+                      ),
+                      AutoStatusPanel(
+                        telemetry: telemetry,
+                        settings: settings,
+                        vehicleState: vehicleState,
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: AppSpacing.xxl),
+                const SectionHeader(
+                  title: 'SERVO',
+                  icon: Icons.rotate_right_rounded,
+                  subtitle: 'Manual control is available only in MANUAL mode',
+                ),
+                AppCard(
+                  child: ServoControl(
+                    currentAngle: telemetry.servoAngle ?? 90,
+                    scanMode: drive.scanMode,
+                    enabled: drive.driveMode == DriveMode.manual,
+                    onAngleChanged: (angle) =>
+                        ref.read(driveProvider.notifier).setServoAngle(angle),
+                    onScanModeChanged: (mode) =>
+                        ref.read(driveProvider.notifier).setScanMode(mode),
+                  ),
+                ),
+              ],
+            ),
+          ),
         ),
-        const SizedBox(height: AppSpacing.sm),
-        _ModeCard(
-          title: 'OBSTACLE AVOIDANCE',
-          description:
-              'The vehicle drives and steers around obstacles on its own.',
-          icon: Icons.auto_mode_rounded,
-          isActive: driveMode == DriveMode.obstacleAvoidance,
-          accent: AppColors.info,
-          requiresConfirmation: true,
-          onTap: onObstacleAvoidance,
-        ),
-        const SizedBox(height: AppSpacing.sm),
-        _ModeCard(
-          title: 'AUTO SCAN',
-          description:
-              'Sweeps the servo and maps distances. The chassis stays still.',
-          icon: Icons.radar_rounded,
-          isActive: isScanning,
-          accent: AppColors.info,
-          onTap: onAutoScan,
+        _StopBar(
+          isActive: behaviour != AutoBehaviour.manual,
+          onStop: () {
+            Haptics.emergency();
+            _standDown(ref);
+          },
         ),
       ],
     );
   }
 }
 
-class _ModeCard extends StatelessWidget {
-  const _ModeCard({
-    required this.title,
-    required this.description,
-    required this.icon,
-    required this.isActive,
-    required this.onTap,
-    this.accent = AppColors.accent,
-    this.requiresConfirmation = false,
-  });
+/// Always-visible stop.
+///
+/// Pinned rather than parked at the end of the list on purpose: the moment you
+/// need it is the moment you are watching the rover, not the phone, and
+/// hunting for a scrolled-away button is not a recovery plan. It stays enabled
+/// even when nothing is running — a stop control that greys out is one you
+/// have to think about before trusting.
+class _StopBar extends StatelessWidget {
+  const _StopBar({required this.isActive, required this.onStop});
 
-  final String title;
-  final String description;
-  final IconData icon;
   final bool isActive;
-  final Color accent;
-  final bool requiresConfirmation;
-  final VoidCallback onTap;
+  final VoidCallback onStop;
 
   @override
   Widget build(BuildContext context) {
-    return Semantics(
-      button: true,
-      selected: isActive,
-      label: requiresConfirmation
-          ? '$title. $description. Requires confirmation to start.'
-          : '$title. $description',
-      child: ExcludeSemantics(
-        child: AppCard(
-          onTap: onTap,
-          accent: isActive ? accent : null,
-          borderColor: isActive ? accent.withValues(alpha: 0.5) : null,
-          padding: const EdgeInsets.symmetric(
-            horizontal: AppSpacing.lg,
-            vertical: AppSpacing.md,
+    return Container(
+      decoration: const BoxDecoration(
+        color: AppColors.surface,
+        border: Border(top: BorderSide(color: AppColors.border)),
+        boxShadow: AppShadows.raised,
+      ),
+      child: SafeArea(
+        top: false,
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(
+            AppSpacing.lg,
+            AppSpacing.md,
+            AppSpacing.lg,
+            AppSpacing.md,
           ),
           child: Row(
             children: [
-              Container(
-                height: 40,
-                width: 40,
-                decoration: BoxDecoration(
-                  color: isActive
-                      ? accent.withValues(alpha: 0.16)
-                      : AppColors.surfaceSunken,
-                  borderRadius: BorderRadius.circular(AppRadii.sm),
-                ),
-                child: Icon(
-                  icon,
-                  size: 19,
-                  color: isActive ? accent : AppColors.textTertiary,
-                ),
-              ),
-              const SizedBox(width: AppSpacing.md),
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    Row(
-                      children: [
-                        Text(
-                          title,
-                          style: AppTypography.titleMedium.copyWith(
-                            fontSize: 15,
-                          ),
-                        ),
-                        if (requiresConfirmation) ...[
-                          const SizedBox(width: 6),
-                          Icon(
-                            Icons.shield_outlined,
-                            size: 12,
-                            color: AppColors.textTertiary,
-                          ),
-                        ],
-                      ],
+                    Text(
+                      isActive ? 'VEHICLE IS DRIVING ITSELF' : 'VEHICLE IDLE',
+                      style: AppTypography.labelStrong.copyWith(
+                        fontSize: 11,
+                        color: isActive
+                            ? AppColors.info
+                            : AppColors.textTertiary,
+                      ),
                     ),
                     const SizedBox(height: 2),
                     Text(
-                      description,
-                      style: AppTypography.bodySmall.copyWith(fontSize: 12),
+                      'Keep it in sight',
+                      style: AppTypography.bodySmall.copyWith(fontSize: 11),
                     ),
                   ],
                 ),
               ),
-              if (isActive)
-                Icon(Icons.check_circle_rounded, size: 18, color: accent)
-              else
-                const Icon(
-                  Icons.chevron_right_rounded,
-                  color: AppColors.textTertiary,
-                ),
+              const SizedBox(width: AppSpacing.md),
+              EmergencyStopButton(
+                compact: true,
+                isStopped: false,
+                onPressed: onStop,
+              ),
             ],
           ),
         ),

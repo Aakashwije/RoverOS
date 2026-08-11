@@ -185,7 +185,13 @@ class ConnectionController extends Notifier<LinkState> {
     if (state.status == ConnectionStatus.scanning) return;
 
     ref.read(scanResultsProvider.notifier).clear();
-    state = state.copyWith(status: ConnectionStatus.scanning, clearError: true);
+    state = state.copyWith(
+      status: ConnectionStatus.scanning,
+      // Published so the UI can run a countdown against the same deadline the
+      // transport is using, rather than guessing at one of its own.
+      scanEndsAt: DateTime.now().add(AppConfig.scanTimeout),
+      clearError: true,
+    );
 
     try {
       _scanSubscription?.cancel();
@@ -193,7 +199,10 @@ class ConnectionController extends Notifier<LinkState> {
         ref.read(scanResultsProvider.notifier).replace,
         onDone: () {
           if (state.status != ConnectionStatus.scanning) return;
-          state = state.copyWith(status: ConnectionStatus.idle);
+          state = state.copyWith(
+            status: ConnectionStatus.idle,
+            clearScanSchedule: true,
+          );
         },
         onError: (Object error) => _reportTransportError(error),
       );
@@ -207,7 +216,10 @@ class ConnectionController extends Notifier<LinkState> {
     _scanSubscription = null;
     await _transport.stopScan();
     if (state.status == ConnectionStatus.scanning) {
-      state = state.copyWith(status: ConnectionStatus.idle);
+      state = state.copyWith(
+        status: ConnectionStatus.idle,
+        clearScanSchedule: true,
+      );
     }
   }
 
@@ -399,6 +411,7 @@ class ConnectionController extends Notifier<LinkState> {
         _ => ConnectionStatus.error,
       },
       errorMessage: failure.message,
+      clearScanSchedule: true,
     );
 
     ref

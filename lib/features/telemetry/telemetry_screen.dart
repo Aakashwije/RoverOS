@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../core/layout/breakpoints.dart';
 import '../../core/router/app_router.dart';
 import '../../core/theme/app_theme.dart';
 import '../../core/utils/formatters.dart';
@@ -11,6 +12,7 @@ import '../../models/commands.dart';
 import '../../models/connection_state.dart';
 import '../../models/settings.dart';
 import '../../models/telemetry.dart';
+import '../../widgets/animated_reveal.dart';
 import '../../widgets/app_badge.dart';
 import '../../widgets/app_card.dart';
 import '../../widgets/app_icon_button.dart';
@@ -22,9 +24,11 @@ import '../../widgets/telemetry_card.dart';
 import '../connection/connection_controller.dart';
 import '../settings/settings_controller.dart';
 import 'telemetry_controller.dart';
+import 'telemetry_history.dart';
+import 'widgets/trend_card.dart';
 
 /// Full telemetry dashboard: every value the vehicle reports, plus the health
-/// of the link carrying them.
+/// of the link carrying them, plus where each has been heading.
 class TelemetryScreen extends ConsumerStatefulWidget {
   const TelemetryScreen({super.key});
 
@@ -57,18 +61,16 @@ class _TelemetryScreenState extends ConsumerState<TelemetryScreen> {
     final link = ref.watch(connectionProvider);
     final telemetry = ref.watch(telemetryProvider);
     final settings = ref.watch(settingsProvider);
+    final history = ref.watch(telemetryHistoryProvider);
     final lastAck = ref.watch(lastAckProvider);
     final error = ref.watch(vehicleErrorProvider);
 
     return Scaffold(
       backgroundColor: AppColors.background,
       appBar: AppBar(
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back_rounded),
-          tooltip: 'Back',
-          onPressed: () =>
-              context.canPop() ? context.pop() : context.go(AppRoute.home),
-        ),
+        // A tab root, not a pushed page — there is nothing behind it to go
+        // back to.
+        automaticallyImplyLeading: false,
         title: const Text('TELEMETRY', style: AppTypography.labelStrong),
         actions: [
           Padding(
@@ -95,6 +97,7 @@ class _TelemetryScreenState extends ConsumerState<TelemetryScreen> {
                 telemetry: telemetry,
                 settings: settings,
                 link: link,
+                history: history,
                 lastAck: lastAck,
                 error: error,
                 onDismissError: () =>
@@ -110,6 +113,7 @@ class _TelemetryBody extends StatelessWidget {
     required this.telemetry,
     required this.settings,
     required this.link,
+    required this.history,
     required this.lastAck,
     required this.error,
     required this.onDismissError,
@@ -118,6 +122,7 @@ class _TelemetryBody extends StatelessWidget {
   final Telemetry telemetry;
   final AppSettings settings;
   final LinkState link;
+  final TelemetryHistory history;
   final CommandAck? lastAck;
   final RoverError? error;
   final VoidCallback onDismissError;
@@ -130,141 +135,294 @@ class _TelemetryBody extends StatelessWidget {
       dangerCm: settings.dangerDistanceCm,
     );
 
-    return ListView(
-      padding: const EdgeInsets.fromLTRB(
-        AppSpacing.lg,
-        AppSpacing.sm,
-        AppSpacing.lg,
-        AppSpacing.xxxl,
+    return PageConstraints(
+      child: ListView(
+        padding: const EdgeInsets.fromLTRB(
+          AppSpacing.lg,
+          AppSpacing.sm,
+          AppSpacing.lg,
+          AppSpacing.xxxl,
+        ),
+        children: [
+          AnimatedReveal(
+            child: error == null
+                ? null
+                : _ErrorCard(
+                    key: ValueKey(error!.code),
+                    error: error!,
+                    onDismiss: onDismissError,
+                  ),
+          ),
+          AnimatedReveal(
+            child: link.status == ConnectionStatus.reconnecting
+                ? _ReconnectingBanner(
+                    key: const ValueKey('reconnecting'),
+                    link: link,
+                  )
+                : null,
+          ),
+          AnimatedReveal(
+            child: isStale && link.isConnected
+                ? const _StaleBanner(key: ValueKey('stale'))
+                : null,
+          ),
+          const SizedBox(height: AppSpacing.md),
+          AppCard(
+            elevated: true,
+            child: BatteryIndicator(percent: telemetry.batteryPercent),
+          ),
+          const SizedBox(height: AppSpacing.xxl),
+          _TrendsSection(
+            telemetry: telemetry,
+            settings: settings,
+            link: link,
+            history: history,
+            isStale: isStale,
+          ),
+          const SizedBox(height: AppSpacing.xxl),
+          // Two-up on a phone becomes four-up on a tablet via _MetricGrid, and
+          // the DRIVE and SENSORS blocks sit side by side rather than stacking
+          // into a column of half-empty rows.
+          TwoPane(
+            primaryFlex: 1,
+            secondaryFlex: 1,
+            primary: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const SectionHeader(title: 'DRIVE', icon: Icons.speed_rounded),
+                _MetricGrid(
+                  children: [
+                    TelemetryCard(
+                      label: 'MOTOR SPEED',
+                      value: telemetry.speedPercent?.toString() ?? '—',
+                      numericValue: telemetry.speedPercent?.toDouble(),
+                      unit: '%',
+                      icon: Icons.speed_rounded,
+                      level: StatusLevel.info,
+                      isStale: isStale,
+                    ),
+                    TelemetryCard(
+                      label: 'MODE',
+                      value: (telemetry.driveMode ?? settings.defaultDriveMode)
+                          .label,
+                      icon: Icons.tune_rounded,
+                      level:
+                          (telemetry.driveMode ?? settings.defaultDriveMode)
+                              .isAutonomous
+                          ? StatusLevel.info
+                          : StatusLevel.neutral,
+                      isStale: isStale,
+                    ),
+                    TelemetryCard(
+                      label: 'LEFT MOTOR',
+                      value: formatSignedPercent(telemetry.leftMotor),
+                      statusLabel: formatMotorDirection(telemetry.leftMotor),
+                      icon: Icons.arrow_circle_left_outlined,
+                      level: StatusLevel.neutral,
+                      isStale: isStale,
+                    ),
+                    TelemetryCard(
+                      label: 'RIGHT MOTOR',
+                      value: formatSignedPercent(telemetry.rightMotor),
+                      statusLabel: formatMotorDirection(telemetry.rightMotor),
+                      icon: Icons.arrow_circle_right_outlined,
+                      level: StatusLevel.neutral,
+                      isStale: isStale,
+                    ),
+                  ],
+                ),
+              ],
+            ),
+            secondary: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const SectionHeader(
+                  title: 'SENSORS',
+                  icon: Icons.sensors_rounded,
+                ),
+                _MetricGrid(
+                  children: [
+                    TelemetryCard(
+                      label: 'FRONT DISTANCE',
+                      value: settings.units.format(telemetry.distanceCm),
+                      numericValue: telemetry.distanceCm?.toDouble(),
+                      unit: settings.units.shortLabel,
+                      icon: Icons.straighten_rounded,
+                      level: distanceStatus.level,
+                      statusLabel: distanceStatus.label,
+                      isStale: isStale,
+                    ),
+                    TelemetryCard(
+                      label: 'SERVO',
+                      value: telemetry.servoAngle?.toString() ?? '—',
+                      numericValue: telemetry.servoAngle?.toDouble(),
+                      unit: '°',
+                      icon: Icons.rotate_right_rounded,
+                      level: StatusLevel.neutral,
+                      isStale: isStale,
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: AppSpacing.xxl),
+          const SectionHeader(title: 'LINK', icon: Icons.bluetooth_rounded),
+          _MetricGrid(
+            children: [
+              TelemetryCard(
+                label: 'CONNECTION',
+                value: link.status.label,
+                icon: Icons.link_rounded,
+                level: link.status.level,
+                statusLabel: link.isMock ? 'MOCK VEHICLE' : null,
+              ),
+              TelemetryCard(
+                label: 'SIGNAL',
+                value: link.signal.label,
+                icon: Icons.settings_input_antenna_rounded,
+                level: link.signal.level,
+                statusLabel: link.rssi == null ? null : '${link.rssi} dBm',
+              ),
+              TelemetryCard(
+                label: 'LIGHTS',
+                value: (telemetry.lightMode ?? LightMode.off).label,
+                icon: Icons.light_mode_rounded,
+                level: (telemetry.lightMode ?? LightMode.off).isEmitting
+                    ? StatusLevel.caution
+                    : StatusLevel.neutral,
+                isStale: isStale,
+              ),
+              TelemetryCard(
+                label: 'LAST ACK',
+                value: lastAck?.verb ?? '—',
+                icon: Icons.check_circle_outline_rounded,
+                level: lastAck == null ? StatusLevel.neutral : StatusLevel.good,
+                statusLabel: lastAck == null
+                    ? 'No command acknowledged'
+                    : formatRelativeTime(lastAck!.receivedAt),
+              ),
+              TelemetryCard(
+                label: 'LINK UPTIME',
+                value: link.uptime == null ? '—' : formatDuration(link.uptime!),
+                icon: Icons.timer_outlined,
+                level: StatusLevel.neutral,
+                statusLabel: link.isConnected
+                    ? 'Since connection'
+                    : 'Not connected',
+              ),
+            ],
+          ),
+        ],
       ),
+    );
+  }
+}
+
+/// Sparklines for the four series worth watching over time.
+class _TrendsSection extends StatelessWidget {
+  const _TrendsSection({
+    required this.telemetry,
+    required this.settings,
+    required this.link,
+    required this.history,
+    required this.isStale,
+  });
+
+  final Telemetry telemetry;
+  final AppSettings settings;
+  final LinkState link;
+  final TelemetryHistory history;
+  final bool isStale;
+
+  String get _spanCaption {
+    final span = history.span;
+    if (span == null) return 'Recording…';
+    if (span.inMinutes < 1) return 'Last ${span.inSeconds}s';
+    return 'Last ${span.inMinutes}m';
+  }
+
+  String get _batteryCaption {
+    final delta = history.batteryDelta;
+    if (delta == null) return _spanCaption;
+    if (delta >= -0.5 && delta <= 0.5) return 'Steady · $_spanCaption';
+    final direction = delta < 0 ? 'Down' : 'Up';
+    return '$direction ${delta.abs().round()}% · $_spanCaption';
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final distanceStatus = telemetry.distanceStatus(
+      cautionCm: settings.cautionDistanceCm,
+      dangerCm: settings.dangerDistanceCm,
+    );
+    final outputPercent = history.samples.isEmpty
+        ? null
+        : history.samples.last.outputPercent;
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      mainAxisSize: MainAxisSize.min,
       children: [
-        if (error != null) ...[
-          _ErrorCard(error: error!, onDismiss: onDismissError),
-          const SizedBox(height: AppSpacing.lg),
-        ],
-        if (link.status == ConnectionStatus.reconnecting) ...[
-          _ReconnectingBanner(link: link),
-          const SizedBox(height: AppSpacing.lg),
-        ],
-        if (isStale && link.isConnected) ...[
-          const _StaleBanner(),
-          const SizedBox(height: AppSpacing.lg),
-        ],
-        AppCard(
-          elevated: true,
-          child: BatteryIndicator(percent: telemetry.batteryPercent),
+        SectionHeader(
+          title: 'TRENDS',
+          icon: Icons.show_chart_rounded,
+          subtitle: history.isEmpty
+              ? 'Trends build while the vehicle is connected'
+              : 'Sampled every 5 seconds · $_spanCaption',
         ),
-        const SizedBox(height: AppSpacing.xxl),
-        const SectionHeader(title: 'DRIVE', icon: Icons.speed_rounded),
         _MetricGrid(
           children: [
-            TelemetryCard(
-              label: 'MOTOR SPEED',
-              value: telemetry.speedPercent?.toString() ?? '—',
-              numericValue: telemetry.speedPercent?.toDouble(),
+            TrendCard(
+              label: 'BATTERY DRAIN',
+              value: telemetry.batteryPercent?.toString() ?? '—',
               unit: '%',
-              icon: Icons.speed_rounded,
-              level: StatusLevel.info,
+              icon: Icons.battery_5_bar_rounded,
+              level: telemetry.batteryStatus.level,
+              // Pinned to the full scale: a pack sitting between 78% and 81%
+              // should look flat, not like a cliff edge.
+              minValue: 0.0,
+              maxValue: 100.0,
+              values: history.battery,
+              caption: _batteryCaption,
               isStale: isStale,
             ),
-            TelemetryCard(
-              label: 'MODE',
-              value: (telemetry.driveMode ?? settings.defaultDriveMode).label,
-              icon: Icons.tune_rounded,
-              level:
-                  (telemetry.driveMode ?? settings.defaultDriveMode)
-                      .isAutonomous
-                  ? StatusLevel.info
-                  : StatusLevel.neutral,
-              isStale: isStale,
+            TrendCard(
+              label: 'SIGNAL',
+              value: link.rssi?.toString() ?? '—',
+              unit: 'dBm',
+              icon: Icons.settings_input_antenna_rounded,
+              level: link.signal.level,
+              minValue: 0.0,
+              maxValue: 100.0,
+              values: history.signal,
+              caption: 'Link quality · ${link.signal.label}',
             ),
-            TelemetryCard(
-              label: 'LEFT MOTOR',
-              value: formatSignedPercent(telemetry.leftMotor),
-              statusLabel: formatMotorDirection(telemetry.leftMotor),
-              icon: Icons.arrow_circle_left_outlined,
-              level: StatusLevel.neutral,
-              isStale: isStale,
-            ),
-            TelemetryCard(
-              label: 'RIGHT MOTOR',
-              value: formatSignedPercent(telemetry.rightMotor),
-              statusLabel: formatMotorDirection(telemetry.rightMotor),
-              icon: Icons.arrow_circle_right_outlined,
-              level: StatusLevel.neutral,
-              isStale: isStale,
-            ),
-          ],
-        ),
-        const SizedBox(height: AppSpacing.xxl),
-        const SectionHeader(title: 'SENSORS', icon: Icons.sensors_rounded),
-        _MetricGrid(
-          children: [
-            TelemetryCard(
-              label: 'FRONT DISTANCE',
+            TrendCard(
+              label: 'DISTANCE',
               value: settings.units.format(telemetry.distanceCm),
-              numericValue: telemetry.distanceCm?.toDouble(),
               unit: settings.units.shortLabel,
               icon: Icons.straighten_rounded,
               level: distanceStatus.level,
-              statusLabel: distanceStatus.label,
+              // Free scale: what counts as near depends on where the rover is,
+              // so the interesting detail is the shape, not the absolute band.
+              values: history.distance,
+              caption: distanceStatus.description,
               isStale: isStale,
             ),
-            TelemetryCard(
-              label: 'SERVO',
-              value: telemetry.servoAngle?.toString() ?? '—',
-              numericValue: telemetry.servoAngle?.toDouble(),
-              unit: '°',
-              icon: Icons.rotate_right_rounded,
-              level: StatusLevel.neutral,
+            TrendCard(
+              label: 'MOTOR OUTPUT',
+              value: outputPercent?.round().toString() ?? '—',
+              unit: '%',
+              icon: Icons.speed_rounded,
+              level: StatusLevel.info,
+              minValue: 0.0,
+              maxValue: 100.0,
+              values: history.output,
+              caption: 'Mean of both sides',
               isStale: isStale,
-            ),
-          ],
-        ),
-        const SizedBox(height: AppSpacing.xxl),
-        const SectionHeader(title: 'LINK', icon: Icons.bluetooth_rounded),
-        _MetricGrid(
-          children: [
-            TelemetryCard(
-              label: 'CONNECTION',
-              value: link.status.label,
-              icon: Icons.link_rounded,
-              level: link.status.level,
-              statusLabel: link.isMock ? 'MOCK VEHICLE' : null,
-            ),
-            TelemetryCard(
-              label: 'SIGNAL',
-              value: link.signal.label,
-              icon: Icons.settings_input_antenna_rounded,
-              level: link.signal.level,
-              statusLabel: link.rssi == null ? null : '${link.rssi} dBm',
-            ),
-            TelemetryCard(
-              label: 'LIGHTS',
-              value: (telemetry.lightMode ?? LightMode.off).label,
-              icon: Icons.light_mode_rounded,
-              level: (telemetry.lightMode ?? LightMode.off).isEmitting
-                  ? StatusLevel.caution
-                  : StatusLevel.neutral,
-              isStale: isStale,
-            ),
-            TelemetryCard(
-              label: 'LAST ACK',
-              value: lastAck?.verb ?? '—',
-              icon: Icons.check_circle_outline_rounded,
-              level: lastAck == null ? StatusLevel.neutral : StatusLevel.good,
-              statusLabel: lastAck == null
-                  ? 'No command acknowledged'
-                  : formatRelativeTime(lastAck!.receivedAt),
-            ),
-            TelemetryCard(
-              label: 'LINK UPTIME',
-              value: link.uptime == null ? '—' : formatDuration(link.uptime!),
-              icon: Icons.timer_outlined,
-              level: StatusLevel.neutral,
-              statusLabel: link.isConnected
-                  ? 'Since connection'
-                  : 'Not connected',
             ),
           ],
         ),
@@ -285,7 +443,7 @@ class _MetricGrid extends StatelessWidget {
       builder: (context, constraints) {
         final columns = constraints.maxWidth ~/ 200;
         final effectiveColumns = columns.clamp(1, 4);
-        final spacing = AppSpacing.md;
+        const spacing = AppSpacing.md;
         final itemWidth =
             (constraints.maxWidth - spacing * (effectiveColumns - 1)) /
             effectiveColumns;
@@ -304,139 +462,156 @@ class _MetricGrid extends StatelessWidget {
 }
 
 class _ErrorCard extends StatelessWidget {
-  const _ErrorCard({required this.error, required this.onDismiss});
+  const _ErrorCard({super.key, required this.error, required this.onDismiss});
 
   final RoverError error;
   final VoidCallback onDismiss;
 
   @override
   Widget build(BuildContext context) {
-    return AppCard(
-      accent: AppColors.danger,
-      borderColor: AppColors.danger.withValues(alpha: 0.45),
-      semanticLabel: '${error.code.name}. ${error.message}',
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          const Icon(Icons.error_rounded, size: 20, color: AppColors.danger),
-          const SizedBox(width: AppSpacing.md),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  children: [
-                    Text(
-                      error.code.name.toUpperCase(),
-                      style: AppTypography.labelStrong.copyWith(
-                        color: AppColors.danger,
+    return Padding(
+      padding: const EdgeInsets.only(bottom: AppSpacing.lg),
+      child: AppCard(
+        accent: AppColors.danger,
+        borderColor: AppColors.danger.withValues(alpha: 0.45),
+        semanticLabel: '${error.code.name}. ${error.message}',
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Icon(
+              Icons.dangerous_rounded,
+              size: 20,
+              color: AppColors.danger,
+            ),
+            const SizedBox(width: AppSpacing.md),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      Flexible(
+                        child: Text(
+                          error.code.name.toUpperCase(),
+                          overflow: TextOverflow.ellipsis,
+                          style: AppTypography.labelStrong.copyWith(
+                            color: AppColors.danger,
+                          ),
+                        ),
                       ),
-                    ),
-                    const SizedBox(width: AppSpacing.sm),
-                    AppBadge(
-                      label: 'CODE ${error.code.code}',
-                      level: StatusLevel.danger,
-                      showIcon: false,
-                      size: AppBadgeSize.small,
+                      const SizedBox(width: AppSpacing.sm),
+                      AppBadge(
+                        label: 'CODE ${error.code.code}',
+                        level: StatusLevel.danger,
+                        showIcon: false,
+                        size: AppBadgeSize.small,
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 3),
+                  Text(error.message, style: AppTypography.bodySmall),
+                  if (error.isFailSafe) ...[
+                    const SizedBox(height: 6),
+                    Text(
+                      'Autonomous mode drops to manual automatically on this error.',
+                      style: AppTypography.bodySmall.copyWith(fontSize: 11),
                     ),
                   ],
-                ),
-                const SizedBox(height: 3),
-                Text(error.message, style: AppTypography.bodySmall),
-                if (error.isFailSafe) ...[
-                  const SizedBox(height: 6),
-                  Text(
-                    'Autonomous mode drops to manual automatically on this error.',
-                    style: AppTypography.bodySmall.copyWith(fontSize: 11),
-                  ),
                 ],
-              ],
+              ),
             ),
-          ),
-          AppIconButton(
-            icon: Icons.close_rounded,
-            semanticLabel: 'Dismiss error',
-            size: 32,
-            iconSize: 16,
-            onPressed: onDismiss,
-          ),
-        ],
+            AppIconButton(
+              icon: Icons.close_rounded,
+              semanticLabel: 'Dismiss error',
+              tooltip: 'Dismiss',
+              size: 32,
+              iconSize: 16,
+              onPressed: onDismiss,
+            ),
+          ],
+        ),
       ),
     );
   }
 }
 
 class _ReconnectingBanner extends StatelessWidget {
-  const _ReconnectingBanner({required this.link});
+  const _ReconnectingBanner({super.key, required this.link});
 
   final LinkState link;
 
   @override
   Widget build(BuildContext context) {
-    final secondsLeft = link.nextReconnectAt
-        ?.difference(DateTime.now())
-        .inSeconds
-        .clamp(0, 999);
+    final secondsLeft = link.nextReconnectAt == null
+        ? null
+        : secondsRemaining(link.nextReconnectAt);
 
-    return Container(
-      padding: const EdgeInsets.all(AppSpacing.md),
-      decoration: BoxDecoration(
-        color: AppColors.info.withValues(alpha: 0.10),
-        borderRadius: AppRadii.cardRadius,
-        border: Border.all(color: AppColors.info.withValues(alpha: 0.35)),
-      ),
-      child: Row(
-        children: [
-          const SizedBox(
-            height: 16,
-            width: 16,
-            child: CircularProgressIndicator(
-              strokeWidth: 2,
-              color: AppColors.info,
+    return Padding(
+      padding: const EdgeInsets.only(bottom: AppSpacing.lg),
+      child: Container(
+        padding: const EdgeInsets.all(AppSpacing.md),
+        decoration: BoxDecoration(
+          color: AppColors.info.withValues(alpha: 0.10),
+          borderRadius: AppRadii.cardRadius,
+          border: Border.all(color: AppColors.info.withValues(alpha: 0.35)),
+        ),
+        child: Row(
+          children: [
+            const SizedBox(
+              height: 16,
+              width: 16,
+              child: CircularProgressIndicator(
+                strokeWidth: 2,
+                color: AppColors.info,
+              ),
             ),
-          ),
-          const SizedBox(width: AppSpacing.md),
-          Expanded(
-            child: Text(
-              secondsLeft == null
-                  ? 'Reconnecting — attempt ${link.reconnectAttempt}'
-                  : 'Reconnecting — attempt ${link.reconnectAttempt}, next try in ${secondsLeft}s',
-              style: AppTypography.bodySmall.copyWith(fontSize: 12),
+            const SizedBox(width: AppSpacing.md),
+            Expanded(
+              child: Text(
+                secondsLeft == null
+                    ? 'Reconnecting — attempt ${link.reconnectAttempt}'
+                    : 'Reconnecting — attempt ${link.reconnectAttempt}, '
+                          'next try in ${secondsLeft}s',
+                style: AppTypography.bodySmall.copyWith(fontSize: 12),
+              ),
             ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }
 }
 
 class _StaleBanner extends StatelessWidget {
-  const _StaleBanner();
+  const _StaleBanner({super.key});
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(AppSpacing.md),
-      decoration: BoxDecoration(
-        color: AppColors.caution.withValues(alpha: 0.10),
-        borderRadius: AppRadii.cardRadius,
-        border: Border.all(color: AppColors.caution.withValues(alpha: 0.35)),
-      ),
-      child: Row(
-        children: [
-          const Icon(
-            Icons.history_toggle_off_rounded,
-            size: 18,
-            color: AppColors.caution,
-          ),
-          const SizedBox(width: AppSpacing.md),
-          Expanded(
-            child: Text(
-              'These readings are stale — the vehicle has stopped reporting.',
-              style: AppTypography.bodySmall.copyWith(fontSize: 12),
+    return Padding(
+      padding: const EdgeInsets.only(bottom: AppSpacing.lg),
+      child: Container(
+        padding: const EdgeInsets.all(AppSpacing.md),
+        decoration: BoxDecoration(
+          color: AppColors.caution.withValues(alpha: 0.10),
+          borderRadius: AppRadii.cardRadius,
+          border: Border.all(color: AppColors.caution.withValues(alpha: 0.35)),
+        ),
+        child: Row(
+          children: [
+            const Icon(
+              Icons.history_toggle_off_rounded,
+              size: 18,
+              color: AppColors.caution,
             ),
-          ),
-        ],
+            const SizedBox(width: AppSpacing.md),
+            Expanded(
+              child: Text(
+                'These readings are stale — the vehicle has stopped reporting.',
+                style: AppTypography.bodySmall.copyWith(fontSize: 12),
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }

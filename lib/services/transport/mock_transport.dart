@@ -9,7 +9,28 @@ import '../../models/vehicle.dart';
 import 'transport.dart';
 
 /// Faults a developer or demo can inject into the simulated rover.
-enum MockFault { none, sensorFailure, motorFault, lowBattery, dropout }
+///
+/// Carries its own copy for the demo panel. Kept as plain strings so this file
+/// stays free of Flutter imports — the transport layer has no business knowing
+/// about icons.
+enum MockFault {
+  none('NONE', 'Simulator running normally'),
+  sensorFailure(
+    'SENSOR FAILURE',
+    'The ultrasonic sensor reports no echo, as a dead HC-SR04 does',
+  ),
+  motorFault(
+    'MOTOR FAULT',
+    'Drive commands are rejected and an error frame is returned',
+  ),
+  lowBattery('LOW BATTERY', 'Drops the pack to 12% to trigger the warnings'),
+  dropout('LINK DROPOUT', 'Kills the link so reconnect and stop paths run');
+
+  const MockFault(this.label, this.description);
+
+  final String label;
+  final String description;
+}
 
 /// A simulated ESP32 rover behind the real [Transport] interface.
 ///
@@ -70,6 +91,31 @@ class MockTransport implements Transport {
   @override
   String? get connectedDeviceId => _deviceId;
 
+  // --- Demo controls --------------------------------------------------------
+  //
+  // Exposed so the in-app simulator panel can drive the scenarios that are
+  // otherwise impossible to reach on demand: a pack about to die, an obstacle
+  // right in front of the bumper, a sensor that has stopped answering.
+
+  MockFault get activeFault => _fault;
+
+  int get batteryPercent => _battery.round();
+
+  int get distanceCm => _distanceCm.round();
+
+  /// Sets the simulated pack level, 0–100.
+  void setBattery(int percent) {
+    _battery = clampPercent(percent).toDouble();
+  }
+
+  /// Places an obstacle at [cm] in front of the bumper.
+  ///
+  /// Bounded by the same range the simulation uses, so the value cannot be
+  /// pushed somewhere the physics step would immediately snap it back from.
+  void setDistance(int cm) {
+    _distanceCm = clampDouble(cm.toDouble(), 6, 320);
+  }
+
   /// Injects a fault so error handling can be exercised without hardware.
   void injectFault(MockFault fault) {
     _fault = fault;
@@ -121,19 +167,29 @@ class MockTransport implements Transport {
     var index = 0;
     _scanTimer?.cancel();
     _scanTimer = Timer.periodic(AppConfig.mockScanDeviceInterval, (timer) {
-      if (index >= catalogue.length) {
-        timer.cancel();
-        return;
+      if (index < catalogue.length) {
+        final (name, id, rssi) = catalogue[index++];
+        found.add(
+          DiscoveredVehicle(
+            id: id,
+            name: name,
+            rssi: rssi + _random.nextInt(6) - 3,
+            lastSeen: DateTime.now(),
+          ),
+        );
+      } else {
+        // A real BLE scan keeps re-advertising devices it can still hear, and
+        // the UI's "last seen" and RSSI readouts are only meaningful if they
+        // move. Refreshing the already-found entries is what exercises that
+        // path — and a device that stopped answering would visibly age.
+        for (var i = 0; i < found.length; i++) {
+          final (_, _, baseRssi) = catalogue[i];
+          found[i] = found[i].copyWith(
+            rssi: baseRssi + _random.nextInt(8) - 4,
+            lastSeen: DateTime.now(),
+          );
+        }
       }
-      final (name, id, rssi) = catalogue[index++];
-      found.add(
-        DiscoveredVehicle(
-          id: id,
-          name: name,
-          rssi: rssi + _random.nextInt(6) - 3,
-          lastSeen: DateTime.now(),
-        ),
-      );
       if (!controller.isClosed) controller.add(List.unmodifiable(found));
     });
 

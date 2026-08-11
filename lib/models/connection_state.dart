@@ -87,6 +87,7 @@ class LinkState {
     this.nextReconnectAt,
     this.isMock = false,
     this.connectedAt,
+    this.scanEndsAt,
   });
 
   final ConnectionStatus status;
@@ -104,6 +105,12 @@ class LinkState {
 
   final bool isMock;
   final DateTime? connectedAt;
+
+  /// When the running scan will time out, for the progress countdown.
+  ///
+  /// A scan that just spins forever is indistinguishable from one that has
+  /// hung; showing how long it has left turns waiting into a known quantity.
+  final DateTime? scanEndsAt;
 
   SignalQuality get signal =>
       status.isConnected ? SignalQuality.fromRssi(rssi) : SignalQuality.none;
@@ -127,9 +134,11 @@ class LinkState {
     DateTime? nextReconnectAt,
     bool? isMock,
     DateTime? connectedAt,
+    DateTime? scanEndsAt,
     bool clearError = false,
     bool clearDevice = false,
     bool clearReconnectSchedule = false,
+    bool clearScanSchedule = false,
   }) {
     return LinkState(
       status: status ?? this.status,
@@ -143,6 +152,7 @@ class LinkState {
           : (nextReconnectAt ?? this.nextReconnectAt),
       isMock: isMock ?? this.isMock,
       connectedAt: clearDevice ? null : (connectedAt ?? this.connectedAt),
+      scanEndsAt: clearScanSchedule ? null : (scanEndsAt ?? this.scanEndsAt),
     );
   }
 

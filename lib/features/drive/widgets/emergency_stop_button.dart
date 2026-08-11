@@ -7,6 +7,10 @@ import '../../../core/theme/app_theme.dart';
 /// Deliberately the loudest control on the screen and always reachable: no
 /// confirmation, no delay, no gesture to learn. Pressing it must be the easiest
 /// thing on the HUD to do by accident-proof reflex.
+///
+/// Size is part of that. A driver reaching for this is not aiming — they are
+/// slapping the corner of the phone they know it lives in — so on the drive
+/// HUD it claims a whole zone rather than sitting as one button among several.
 class EmergencyStopButton extends StatefulWidget {
   const EmergencyStopButton({
     super.key,
@@ -14,6 +18,7 @@ class EmergencyStopButton extends StatefulWidget {
     required this.isStopped,
     this.onReset,
     this.compact = false,
+    this.height,
   });
 
   final VoidCallback onPressed;
@@ -26,6 +31,11 @@ class EmergencyStopButton extends StatefulWidget {
 
   /// Shorter layout for tight landscape rows.
   final bool compact;
+
+  /// Overrides the height the variant would otherwise pick. The drive HUD
+  /// passes a taller value so the strike zone matches the corner of the screen
+  /// a driver actually hits.
+  final double? height;
 
   @override
   State<EmergencyStopButton> createState() => _EmergencyStopButtonState();
@@ -69,6 +79,12 @@ class _EmergencyStopButtonState extends State<EmergencyStopButton>
     final isLatched = widget.isStopped;
     final label = isLatched ? 'STOPPED' : 'EMERGENCY STOP';
     final onTap = isLatched ? widget.onReset : widget.onPressed;
+    final height = widget.height ?? (widget.compact ? 56 : 68);
+
+    // Latched, the control is red-on-dark rather than white-on-red, so the two
+    // states never look alike at a glance. That foreground red has to clear
+    // 4.5:1 on the dark surface, which the fill red does not.
+    final foreground = isLatched ? AppColors.emergencyLight : Colors.white;
 
     return Semantics(
       button: true,
@@ -97,7 +113,7 @@ class _EmergencyStopButtonState extends State<EmergencyStopButton>
                 scale: _pressed ? 0.95 : 1,
                 duration: AppDurations.instant,
                 child: Container(
-                  height: widget.compact ? 56 : 68,
+                  height: height,
                   padding: EdgeInsets.symmetric(
                     horizontal: widget.compact ? AppSpacing.lg : AppSpacing.xxl,
                   ),
@@ -112,7 +128,7 @@ class _EmergencyStopButtonState extends State<EmergencyStopButton>
                     borderRadius: BorderRadius.circular(AppRadii.md),
                     border: Border.all(
                       color: isLatched
-                          ? AppColors.emergency
+                          ? AppColors.emergencyLight
                           : Colors.white.withValues(alpha: 0.25),
                       width: 2,
                     ),
@@ -130,8 +146,8 @@ class _EmergencyStopButtonState extends State<EmergencyStopButton>
                         isLatched
                             ? Icons.lock_reset_rounded
                             : Icons.pan_tool_rounded,
-                        size: widget.compact ? 20 : 24,
-                        color: isLatched ? AppColors.emergency : Colors.white,
+                        size: widget.compact ? 22 : 26,
+                        color: foreground,
                       ),
                       const SizedBox(width: AppSpacing.md),
                       Flexible(
@@ -144,11 +160,9 @@ class _EmergencyStopButtonState extends State<EmergencyStopButton>
                               maxLines: 1,
                               overflow: TextOverflow.ellipsis,
                               style: AppTypography.button.copyWith(
-                                fontSize: widget.compact ? 14 : 16,
+                                fontSize: widget.compact ? 15 : 17,
                                 letterSpacing: 1.6,
-                                color: isLatched
-                                    ? AppColors.emergency
-                                    : Colors.white,
+                                color: foreground,
                               ),
                             ),
                             if (isLatched && widget.onReset != null)

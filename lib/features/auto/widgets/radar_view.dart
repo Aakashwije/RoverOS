@@ -21,6 +21,7 @@ class RadarView extends StatelessWidget {
     required this.settings,
     this.size = 260,
     this.compact = false,
+    this.isSweeping = false,
   });
 
   final Telemetry telemetry;
@@ -29,6 +30,11 @@ class RadarView extends StatelessWidget {
 
   /// Drops labels and rings for the small Drive-HUD preview.
   final bool compact;
+
+  /// Brightens the needle and widens its trail while the servo is actually
+  /// sweeping. Standing still, a radar drawn at full intensity implies the
+  /// vehicle is scanning when it is not — the emphasis has to mean something.
+  final bool isSweeping;
 
   /// Canvas angle (standard math convention) for a servo angle in degrees,
   /// 0–180. The sweep runs left→forward→right across the top half-plane.
@@ -80,6 +86,7 @@ class RadarView extends StatelessWidget {
                 cautionCm: settings.cautionDistanceCm,
                 dangerCm: settings.dangerDistanceCm,
                 compact: compact,
+                isSweeping: isSweeping,
               ),
             ),
           ),
@@ -97,6 +104,7 @@ class _RadarPainter extends CustomPainter {
     required this.cautionCm,
     required this.dangerCm,
     required this.compact,
+    required this.isSweeping,
   });
 
   final double sweepAngle;
@@ -105,6 +113,7 @@ class _RadarPainter extends CustomPainter {
   final int cautionCm;
   final int dangerCm;
   final bool compact;
+  final bool isSweeping;
 
   @override
   void paint(Canvas canvas, Size size) {
@@ -215,7 +224,7 @@ class _RadarPainter extends CustomPainter {
       origin,
       tip,
       Paint()
-        ..strokeWidth = 2
+        ..strokeWidth = isSweeping ? 3 : 2
         ..strokeCap = StrokeCap.round
         ..shader = LinearGradient(
           colors: [
@@ -225,8 +234,21 @@ class _RadarPainter extends CustomPainter {
         ).createShader(Rect.fromPoints(origin, tip)),
     );
 
+    if (isSweeping) {
+      // Bloom at the needle tip — the strongest cue that this is live, and the
+      // one that survives being glanced at from across a room.
+      canvas.drawCircle(
+        tip,
+        compact ? 4 : 6,
+        Paint()
+          ..color = AppColors.accent.withValues(alpha: 0.55)
+          ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 6),
+      );
+    }
+
     // Wedge trailing the needle reads as motion even on a static frame.
-    final trailAngle = canvasAngle - 0.14;
+    final trailSpan = isSweeping ? 0.30 : 0.14;
+    final trailAngle = canvasAngle - trailSpan;
     final trailDirection = Offset(math.cos(trailAngle), math.sin(trailAngle));
     final path = Path()
       ..moveTo(origin.dx, origin.dy)
@@ -238,7 +260,10 @@ class _RadarPainter extends CustomPainter {
       ..close();
     canvas.drawPath(
       path,
-      Paint()..color = AppColors.accent.withValues(alpha: 0.08),
+      Paint()
+        ..color = AppColors.accent.withValues(
+          alpha: isSweeping ? 0.16 : 0.08,
+        ),
     );
   }
 
@@ -294,5 +319,6 @@ class _RadarPainter extends CustomPainter {
       !identical(old.samples, samples) ||
       old.maxRangeCm != maxRangeCm ||
       old.cautionCm != cautionCm ||
-      old.dangerCm != dangerCm;
+      old.dangerCm != dangerCm ||
+      old.isSweeping != isSweeping;
 }
