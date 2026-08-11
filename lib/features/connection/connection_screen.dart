@@ -10,6 +10,7 @@ import '../../core/theme/app_theme.dart';
 import '../../models/connection_state.dart';
 import '../../models/vehicle.dart';
 import '../../services/bluetooth_permission_service.dart';
+import '../../services/haptics.dart';
 import '../../widgets/animated_reveal.dart';
 import '../../widgets/app_button.dart';
 import '../../widgets/app_card.dart';
@@ -172,6 +173,18 @@ class _ConnectionScreenState extends ConsumerState<ConnectionScreen>
                           onRetry: () => link.hasRememberedDevice
                               ? controller.reconnectSaved()
                               : controller.startScan(),
+                          // A device seen seconds ago does not need to be
+                          // rediscovered — dial it directly. Scanning again
+                          // just adds the radio's discovery latency to a
+                          // connection attempt that already knows its target.
+                          onRetryDirect: link.hasRememberedDevice
+                              ? () => controller.connectTo(
+                                    DiscoveredVehicle(
+                                      id: link.deviceId!,
+                                      name: link.deviceName ?? '',
+                                    ),
+                                  )
+                              : null,
                         ),
                       ),
               ),
@@ -215,7 +228,12 @@ class _ConnectionScreenState extends ConsumerState<ConnectionScreen>
                           link.deviceId == device.id,
                       isConnected:
                           link.isConnected && link.deviceId == device.id,
-                      onConnect: () => controller.connectTo(device),
+                      onConnect: () {
+                        Haptics.selection(
+                          enabled: settings.hapticsEnabled,
+                        );
+                        controller.connectTo(device);
+                      },
                     ),
                   const SizedBox(height: AppSpacing.lg),
                 ],
@@ -246,7 +264,12 @@ class _ConnectionScreenState extends ConsumerState<ConnectionScreen>
                           link.deviceId == device.id,
                       isConnected:
                           link.isConnected && link.deviceId == device.id,
-                      onConnect: () => controller.connectTo(device),
+                      onConnect: () {
+                        Haptics.selection(
+                          enabled: settings.hapticsEnabled,
+                        );
+                        controller.connectTo(device);
+                      },
                     ),
                 const SizedBox(height: AppSpacing.xxl),
                 if (link.isConnected)
@@ -346,15 +369,27 @@ class _LinkSummary extends StatelessWidget {
 /// Failure panel. Always states what happened and what to do about it — never
 /// a bare "something went wrong".
 class _ErrorPanel extends StatelessWidget {
-  const _ErrorPanel({required this.link, required this.onRetry});
+  const _ErrorPanel({
+    required this.link,
+    required this.onRetry,
+    this.onRetryDirect,
+  });
 
   final LinkState link;
   final VoidCallback onRetry;
+
+  /// Connects straight to the remembered vehicle, skipping the scan. Null
+  /// when no vehicle is remembered, in which case [onRetry] (a scan) is the
+  /// only way forward.
+  final VoidCallback? onRetryDirect;
 
   @override
   Widget build(BuildContext context) {
     final isReconnecting = link.status == ConnectionStatus.reconnecting;
     final color = AppColors.forStatus(link.status.level);
+    // Prefer the direct dial: the target is already known, so the full scan
+    // is strictly slower.
+    final retry = onRetryDirect ?? onRetry;
 
     return Container(
       padding: const EdgeInsets.all(AppSpacing.lg),
@@ -398,8 +433,15 @@ class _ErrorPanel extends StatelessWidget {
             size: AppButtonSize.small,
             variant: AppButtonVariant.secondary,
             isLoading: isReconnecting,
-            onPressed: isReconnecting ? null : onRetry,
+            onPressed: isReconnecting ? null : retry,
           ),
+          if (onRetryDirect != null && !isReconnecting) ...[
+            const SizedBox(height: AppSpacing.xs),
+            Text(
+              'Retries the last link directly — no rescan.',
+              style: AppTypography.bodySmall.copyWith(fontSize: 11),
+            ),
+          ],
         ],
       ),
     );

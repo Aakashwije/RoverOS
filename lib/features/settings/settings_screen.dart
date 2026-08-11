@@ -11,6 +11,7 @@ import '../../core/utils/validation.dart';
 import '../../models/commands.dart';
 import '../../models/connection_state.dart';
 import '../../models/settings.dart';
+import '../../services/haptics.dart';
 import '../../widgets/app_badge.dart';
 import '../../widgets/app_button.dart';
 import '../../widgets/app_modal.dart';
@@ -38,6 +39,11 @@ class SettingsScreen extends ConsumerStatefulWidget {
 
 class _SettingsScreenState extends ConsumerState<SettingsScreen> {
   final ScrollController _scrollController = ScrollController();
+
+  /// One gate for every haptic on this screen, so the setting is honoured in
+  /// a single place rather than repeated at each row.
+  void _tick() =>
+      Haptics.selection(enabled: ref.read(settingsProvider).hapticsEnabled);
   final Map<SettingsCategory, GlobalKey> _sectionKeys = {
     for (final category in SettingsCategory.values) category: GlobalKey(),
   };
@@ -254,9 +260,12 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
             showIcon: false,
             size: AppBadgeSize.small,
           ),
-          onTap: () => controller.update(
-            (s) => s.copyWith(joystickSide: s.joystickSide.opposite),
-          ),
+          onTap: () {
+            _tick();
+            controller.update(
+              (s) => s.copyWith(joystickSide: s.joystickSide.opposite),
+            );
+          },
         ),
         Padding(
           padding: const EdgeInsets.fromLTRB(
@@ -330,8 +339,10 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
           description: 'Vibrate on joystick engagement and direction changes',
           icon: Icons.vibration_rounded,
           value: settings.hapticsEnabled,
-          onChanged: (value) =>
-              controller.update((s) => s.copyWith(hapticsEnabled: value)),
+          onChanged: (value) {
+            if (value) Haptics.selection(enabled: true);
+            controller.update((s) => s.copyWith(hapticsEnabled: value));
+          },
         ),
       ],
     );
@@ -466,13 +477,16 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
             showIcon: false,
             size: AppBadgeSize.small,
           ),
-          onTap: () => controller.update(
-            (s) => s.copyWith(
-              defaultLightMode:
-                  LightMode.values[(s.defaultLightMode.index + 1) %
-                      LightMode.values.length],
-            ),
-          ),
+          onTap: () {
+            _tick();
+            controller.update(
+              (s) => s.copyWith(
+                defaultLightMode:
+                    LightMode.values[(s.defaultLightMode.index + 1) %
+                        LightMode.values.length],
+              ),
+            );
+          },
         ),
         SettingsRow(
           label: 'Flash speed',
@@ -484,13 +498,16 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
             showIcon: false,
             size: AppBadgeSize.small,
           ),
-          onTap: () => controller.update(
-            (s) => s.copyWith(
-              flashSpeed: s.flashSpeed == FlashSpeed.slow
-                  ? FlashSpeed.fast
-                  : FlashSpeed.slow,
-            ),
-          ),
+          onTap: () {
+            _tick();
+            controller.update(
+              (s) => s.copyWith(
+                flashSpeed: s.flashSpeed == FlashSpeed.slow
+                    ? FlashSpeed.fast
+                    : FlashSpeed.slow,
+              ),
+            );
+          },
         ),
         Padding(
           padding: const EdgeInsets.fromLTRB(
@@ -532,8 +549,10 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
           description: 'Retry the saved vehicle with backoff after a dropout',
           icon: Icons.autorenew_rounded,
           value: settings.autoReconnect,
-          onChanged: (value) =>
-              controller.update((s) => s.copyWith(autoReconnect: value)),
+          onChanged: (value) {
+            _tick();
+            controller.update((s) => s.copyWith(autoReconnect: value));
+          },
         ),
         Padding(
           padding: const EdgeInsets.fromLTRB(
@@ -609,13 +628,16 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
             showIcon: false,
             size: AppBadgeSize.small,
           ),
-          onTap: () => controller.update(
-            (s) => s.copyWith(
-              units: s.units == DistanceUnits.metric
-                  ? DistanceUnits.imperial
-                  : DistanceUnits.metric,
-            ),
-          ),
+          onTap: () {
+            _tick();
+            controller.update(
+              (s) => s.copyWith(
+                units: s.units == DistanceUnits.metric
+                    ? DistanceUnits.imperial
+                    : DistanceUnits.metric,
+              ),
+            );
+          },
         ),
         SettingsRow(
           label: 'Replay setup guide',

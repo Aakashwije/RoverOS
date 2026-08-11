@@ -244,6 +244,10 @@ class _JoystickPainter extends CustomPainter {
 
   void _paintDeadZone(Canvas canvas, Offset center, double radius) {
     if (deadZoneFraction <= 0) return;
+    // Below this size the ring is a smudge a few pixels wide that reads as
+    // dirt on the pad rather than as a boundary — drop it and let the
+    // cross-hairs carry the centre reference alone.
+    if (radius * deadZoneFraction < 8) return;
     canvas.drawCircle(
       center,
       radius * deadZoneFraction,

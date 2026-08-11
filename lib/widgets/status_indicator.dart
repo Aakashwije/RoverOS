@@ -43,6 +43,8 @@ class _StatusIndicatorState extends State<StatusIndicator>
     duration: AppDurations.pulse,
   );
 
+  bool _reduceMotion = false;
+
   @override
   void initState() {
     super.initState();
@@ -50,14 +52,29 @@ class _StatusIndicatorState extends State<StatusIndicator>
   }
 
   @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final reduce = AppMotion.reduceMotion(context);
+    if (reduce == _reduceMotion) return;
+    _reduceMotion = reduce;
+    _syncAnimation();
+  }
+
+  @override
   void didUpdateWidget(StatusIndicator oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (widget.pulsing == oldWidget.pulsing) return;
-    if (widget.pulsing) {
+    _syncAnimation();
+  }
+
+  /// The dot holds steady bright instead of pulsing under reduce motion — a
+  /// transient state is still marked, just not by movement.
+  void _syncAnimation() {
+    if (widget.pulsing && !_reduceMotion) {
       _controller.repeat(reverse: true);
     } else {
       _controller.stop();
-      _controller.value = 0;
+      _controller.value = widget.pulsing ? 1 : 0;
     }
   }
 

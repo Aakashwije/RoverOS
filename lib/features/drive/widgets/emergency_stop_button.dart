@@ -50,6 +50,8 @@ class _EmergencyStopButtonState extends State<EmergencyStopButton>
 
   bool _pressed = false;
 
+  bool _reduceMotion = false;
+
   @override
   void initState() {
     super.initState();
@@ -57,14 +59,29 @@ class _EmergencyStopButtonState extends State<EmergencyStopButton>
   }
 
   @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final reduce = AppMotion.reduceMotion(context);
+    if (reduce == _reduceMotion) return;
+    _reduceMotion = reduce;
+    _syncPulse();
+  }
+
+  @override
   void didUpdateWidget(EmergencyStopButton oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (widget.isStopped == oldWidget.isStopped) return;
-    if (widget.isStopped) {
+    _syncPulse();
+  }
+
+  /// Latched, the button must be unmissable; a steady full glow carries that
+  /// when pulsing is off the table.
+  void _syncPulse() {
+    if (widget.isStopped && !_reduceMotion) {
       _pulse.repeat(reverse: true);
     } else {
       _pulse.stop();
-      _pulse.value = 0;
+      _pulse.value = widget.isStopped ? 1 : 0;
     }
   }
 

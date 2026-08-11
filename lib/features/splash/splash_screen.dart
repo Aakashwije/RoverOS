@@ -171,6 +171,17 @@ class _AccentBloomState extends State<_AccentBloom>
   )..repeat(reverse: true);
 
   @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    // Under reduce motion the bloom holds at a steady glow — the splash still
+    // reads as alive while storage resolves, just without the breathing.
+    if (AppMotion.reduceMotion(context)) {
+      _breath.stop();
+      _breath.value = 0.5;
+    }
+  }
+
+  @override
   void dispose() {
     _breath.dispose();
     super.dispose();

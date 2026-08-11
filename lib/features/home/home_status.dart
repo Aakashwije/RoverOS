@@ -78,7 +78,7 @@ class HomeStatus {
       return HomeStatus(
         title: link.status.label,
         detail: link.status == ConnectionStatus.reconnecting
-            ? 'Attempt ${link.reconnectAttempt} — backing off between tries'
+            ? _reconnectDetail(link, now ?? DateTime.now())
             : link.status.description,
         level: StatusLevel.info,
         icon: Icons.bluetooth_searching_rounded,
@@ -175,5 +175,19 @@ class HomeStatus {
       icon: isMockMode ? Icons.science_rounded : Icons.check_circle_rounded,
       action: HomeAction.drive,
     );
+  }
+
+  /// How the banner describes a reconnect in flight. The countdown matters
+  /// more than the attempt number: "retrying in 6s" tells the user whether to
+  /// keep waiting or intervene, which "attempt 3" alone does not.
+  static String _reconnectDetail(LinkState link, DateTime now) {
+    final attempt = link.reconnectAttempt;
+    final at = link.nextReconnectAt;
+    if (at == null) {
+      return 'Attempt $attempt — backing off between tries';
+    }
+    final seconds = at.difference(now).inSeconds;
+    if (seconds <= 0) return 'Attempt $attempt — retrying now';
+    return 'Attempt $attempt — next try in ${seconds}s';
   }
 }

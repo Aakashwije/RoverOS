@@ -12,6 +12,7 @@ import '../../core/theme/app_theme.dart';
 import '../../models/connection_state.dart';
 import '../../widgets/animated_reveal.dart';
 import '../../widgets/app_badge.dart';
+import '../../widgets/app_bottom_sheet.dart';
 import '../../widgets/app_button.dart';
 import '../../widgets/connection_badge.dart';
 import '../../widgets/section_header.dart';
@@ -86,6 +87,55 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
       case HomeAction.waitForLink:
         break;
     }
+  }
+
+  /// The feed on Home shows the four most recent entries; the sheet carries
+  /// the whole log and owns the destructive clear, so wiping history is a
+  /// deliberate act rather than a mis-tap on the section header.
+  void _showFullActivity(BuildContext context) {
+    AppBottomSheet.show<void>(
+      context,
+      title: 'Activity',
+      subtitle: 'Everything the app and vehicle have done this run',
+      icon: Icons.history_rounded,
+      builder: (sheetContext) => Consumer(
+        builder: (context, ref, _) {
+          final entries = ref.watch(activityLogProvider);
+          return Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Flexible(
+                child: SingleChildScrollView(
+                  child: ActivityFeed(
+                    entries: entries,
+                    maxEntries: entries.length,
+                  ),
+                ),
+              ),
+              if (entries.isNotEmpty) ...[
+                const SizedBox(height: AppSpacing.md),
+                Align(
+                  alignment: Alignment.centerRight,
+                  child: TextButton(
+                    onPressed: () {
+                      ref.read(activityLogProvider.notifier).clear();
+                      Navigator.of(context).pop();
+                    },
+                    child: Text(
+                      'CLEAR HISTORY',
+                      style: AppTypography.label.copyWith(
+                        color: AppColors.danger,
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            ],
+          );
+        },
+      ),
+    );
   }
 
   @override
@@ -171,11 +221,9 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                         trailing: activity.isEmpty
                             ? null
                             : TextButton(
-                                onPressed: () => ref
-                                    .read(activityLogProvider.notifier)
-                                    .clear(),
+                                onPressed: () => _showFullActivity(context),
                                 child: Text(
-                                  'CLEAR',
+                                  'VIEW ALL',
                                   style: AppTypography.label.copyWith(
                                     color: AppColors.accent,
                                   ),
@@ -217,6 +265,8 @@ class _HomeHeader extends StatelessWidget {
             children: [
               Text(
                 AppConfig.appName,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
                 style: AppTypography.wordmark.copyWith(
                   fontSize: 28,
                   letterSpacing: 4.5,

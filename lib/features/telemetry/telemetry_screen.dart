@@ -1,13 +1,17 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:share_plus/share_plus.dart';
 
 import '../../core/layout/breakpoints.dart';
+import '../../core/providers/app_providers.dart';
 import '../../core/router/app_router.dart';
 import '../../core/theme/app_theme.dart';
 import '../../core/utils/formatters.dart';
+import '../../core/utils/session_log.dart';
 import '../../models/commands.dart';
 import '../../models/connection_state.dart';
 import '../../models/settings.dart';
@@ -56,6 +60,25 @@ class _TelemetryScreenState extends ConsumerState<TelemetryScreen> {
     super.dispose();
   }
 
+  Future<void> _shareSessionLog() async {
+    final log = SessionLog.build(
+      history: ref.read(telemetryHistoryProvider),
+      activity: ref.read(activityLogProvider),
+      now: DateTime.now(),
+    );
+
+    // Nothing captured yet: fall back to the clipboard rather than handing the
+    // share sheet an empty file, and say so.
+    if (log.trim().isEmpty) {
+      await Clipboard.setData(const ClipboardData(text: 'No data recorded.'));
+      return;
+    }
+
+    await SharePlus.instance.share(
+      ShareParams(text: log, subject: 'ROVEROS session log'),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final link = ref.watch(connectionProvider);
@@ -73,6 +96,14 @@ class _TelemetryScreenState extends ConsumerState<TelemetryScreen> {
         automaticallyImplyLeading: false,
         title: const Text('TELEMETRY', style: AppTypography.labelStrong),
         actions: [
+          AppIconButton(
+            icon: Icons.ios_share_rounded,
+            semanticLabel: 'Share session log',
+            tooltip: 'Share session log',
+            size: 40,
+            onPressed: _shareSessionLog,
+          ),
+          const SizedBox(width: AppSpacing.sm),
           Padding(
             padding: const EdgeInsets.only(right: AppSpacing.lg),
             child: Center(

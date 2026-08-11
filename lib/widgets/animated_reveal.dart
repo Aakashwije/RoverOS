@@ -26,6 +26,9 @@ class AnimatedReveal extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // Reduce-motion users get the state change without the transition: the
+    // banner still appears and disappears, it just does not slide or fade.
+    final duration = AppMotion.of(context, this.duration);
     return AnimatedSize(
       duration: duration,
       curve: AppDurations.standard,
@@ -88,10 +91,21 @@ class _PulseOnChangeState extends State<PulseOnChange>
     value: 1,
   );
 
+  bool _reduceMotion = false;
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    _reduceMotion = AppMotion.reduceMotion(context);
+  }
+
   @override
   void didUpdateWidget(PulseOnChange oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (widget.value == oldWidget.value || !widget.enabled) return;
+    // A glow that pulses is a strobe to a vestibular-sensitive user; the
+    // value itself still updates, which is the actual information.
+    if (_reduceMotion) return;
     _controller.forward(from: 0);
   }
 

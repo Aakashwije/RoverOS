@@ -44,14 +44,32 @@ class _RoverMarkState extends State<RoverMark> with TickerProviderStateMixin {
     curve: Curves.easeOutCubic,
   );
 
+  bool _reduceMotion = false;
+
   @override
   void initState() {
     super.initState();
-    if (widget.animate) {
+    _syncAnimation();
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final reduce = AppMotion.reduceMotion(context);
+    if (reduce == _reduceMotion) return;
+    _reduceMotion = reduce;
+    _syncAnimation();
+  }
+
+  void _syncAnimation() {
+    if (widget.animate && !_reduceMotion) {
       _drawController.forward();
       _sweepController.repeat(reverse: true);
     } else {
+      // Reduce motion, or a static mark: draw the logo complete and park the
+      // servo arc mid-sweep.
       _drawController.value = 1;
+      _sweepController.stop();
       _sweepController.value = 0.5;
     }
   }

@@ -77,13 +77,15 @@ class TelemetryHistory {
 /// Sampling is decoupled from the telemetry stream on purpose. Frames arrive
 /// at 5Hz, which would fill the window with 24 seconds of history and burn
 /// rebuilds on data no sparkline can resolve; one sample per
-/// [_sampleInterval] gives a window measured in minutes at a fraction of the
+/// [sampleInterval] gives a window measured in minutes at a fraction of the
 /// cost.
 class TelemetryHistoryController extends Notifier<TelemetryHistory> {
   /// Roughly ten minutes of record at the sample interval below.
   static const int maxSamples = 120;
 
-  static const Duration _sampleInterval = Duration(seconds: 5);
+  /// Published for the session-log exporter, which names the sampling rate in
+  /// its header rather than guessing at it.
+  static const Duration sampleInterval = Duration(seconds: 5);
 
   DateTime _lastSampleAt = DateTime.fromMillisecondsSinceEpoch(0);
 
@@ -106,7 +108,7 @@ class TelemetryHistoryController extends Notifier<TelemetryHistory> {
     if (!telemetry.hasData) return;
 
     final now = DateTime.now();
-    if (now.difference(_lastSampleAt) < _sampleInterval) return;
+    if (now.difference(_lastSampleAt) < sampleInterval) return;
     _lastSampleAt = now;
 
     final link = ref.read(connectionProvider);

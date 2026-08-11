@@ -83,3 +83,21 @@ abstract final class AppDurations {
   static const Curve standard = Curves.easeOutQuart;
   static const Curve spring = Curves.elasticOut;
 }
+
+/// Motion, gated by the platform's reduce-motion accessibility setting.
+///
+/// The dashboard leans on animation for meaning — a banner fading in is how
+/// the app says "this just changed" — but vestibular triggers are not
+/// optional for the people they affect. When the OS asks for reduced motion,
+/// loops stop and transitions collapse to near-instant; the information the
+/// motion carried survives as a state change that simply appears.
+abstract final class AppMotion {
+  static bool reduceMotion(BuildContext context) =>
+      MediaQuery.maybeOf(context)?.disableAnimations ?? false;
+
+  /// Collapses [duration] to near-zero under reduce motion. Never exactly
+  /// zero: a zero-duration [AnimatedSize] still lays out over two frames, and
+  /// several callers key behaviour off a transition having happened at all.
+  static Duration of(BuildContext context, Duration duration) =>
+      reduceMotion(context) ? const Duration(milliseconds: 1) : duration;
+}

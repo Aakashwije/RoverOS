@@ -34,6 +34,12 @@ class AutoScreen extends ConsumerStatefulWidget {
 }
 
 class _AutoScreenState extends ConsumerState<AutoScreen> {
+  /// The fault that stood the vehicle down, kept on screen until the user
+  /// acknowledges it. Without this the only evidence of a fail-safe is the
+  /// segmented control quietly flipping back to MANUAL, which reads as if
+  /// the user pressed it themselves.
+  RoverError? _standDownFault;
+
   @override
   Widget build(BuildContext context) {
     final link = ref.watch(connectionProvider);
@@ -45,6 +51,10 @@ class _AutoScreenState extends ConsumerState<AutoScreen> {
       final drive = ref.read(driveProvider);
       if (!drive.driveMode.isAutonomous) return;
       ref.read(driveProvider.notifier).setDriveMode(DriveMode.manual);
+      // The driver is watching the rover, not the phone — the stop has to be
+      // felt, and the reason has to be on screen when they look down.
+      Haptics.medium(enabled: ref.read(settingsProvider).hapticsEnabled);
+      setState(() => _standDownFault = next);
     });
 
     return Scaffold(
@@ -56,7 +66,11 @@ class _AutoScreenState extends ConsumerState<AutoScreen> {
       body: SafeArea(
         top: false,
         child: link.isConnected
-            ? const _AutoBody()
+            ? _AutoBody(
+                standDownFault: _standDownFault,
+                onAcknowledgeFault: () =>
+                    setState(() => _standDownFault = null),
+              )
             : FeaturePlaceholder(
                 icon: Icons.auto_mode_rounded,
                 title: 'No vehicle connected',
@@ -72,7 +86,13 @@ class _AutoScreenState extends ConsumerState<AutoScreen> {
 }
 
 class _AutoBody extends ConsumerWidget {
-  const _AutoBody();
+  const _AutoBody({
+    required this.standDownFault,
+    required this.onAcknowledgeFault,
+  });
+
+  final RoverError? standDownFault;
+  final VoidCallback onAcknowledgeFault;
 
   Future<void> _select(
     BuildContext context,
@@ -155,6 +175,20 @@ class _AutoBody extends ConsumerWidget {
                 AppSpacing.lg,
               ),
               children: [
+                AnimatedReveal(
+                  child: standDownFault == null
+                      ? null
+                      : Padding(
+                          key: ValueKey(standDownFault!.receivedAt),
+                          padding: const EdgeInsets.only(
+                            bottom: AppSpacing.lg,
+                          ),
+                          child: _StandDownBanner(
+                            fault: standDownFault!,
+                            onAcknowledge: onAcknowledgeFault,
+                          ),
+                        ),
+                ),
                 DecisionReadout(
                   telemetry: telemetry,
                   behaviour: behaviour,
@@ -243,6 +277,70 @@ class _AutoBody extends ConsumerWidget {
           },
         ),
       ],
+    );
+  }
+}
+
+/// One-shot explanation shown after the fail-safe fires. Stays until
+/// dismissed: the user must acknowledge that *the vehicle* ended autonomous
+/// driving, not them.
+class _StandDownBanner extends StatelessWidget {
+  const _StandDownBanner({required this.fault, required this.onAcknowledge});
+
+  final RoverError fault;
+  final VoidCallback onAcknowledge;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(AppSpacing.lg),
+      decoration: BoxDecoration(
+        color: AppColors.danger.withValues(alpha: 0.12),
+        borderRadius: AppRadii.cardRadius,
+        border: Border.all(color: AppColors.danger.withValues(alpha: 0.5)),
+        boxShadow: AppShadows.glow(AppColors.danger, blur: 18, opacity: 0.18),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Row(
+            children: [
+              const Icon(
+                Icons.report_problem_rounded,
+                size: 18,
+                color: AppColors.danger,
+              ),
+              const SizedBox(width: AppSpacing.sm),
+              Expanded(
+                child: Text(
+                  'RETURNED TO MANUAL',
+                  style: AppTypography.labelStrong.copyWith(
+                    color: AppColors.danger,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: AppSpacing.sm),
+          Text(
+            'The vehicle reported a fault (${fault.message}) and autonomous '
+            'driving was stopped for you.',
+            style: AppTypography.bodySmall.copyWith(fontSize: 12),
+          ),
+          const SizedBox(height: AppSpacing.md),
+          Align(
+            alignment: Alignment.centerRight,
+            child: TextButton(
+              onPressed: onAcknowledge,
+              child: Text(
+                'UNDERSTOOD',
+                style: AppTypography.label.copyWith(color: AppColors.accent),
+              ),
+            ),
+          ),
+        ],
+      ),
     );
   }
 }
