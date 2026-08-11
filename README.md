@@ -188,12 +188,12 @@ sits only on the inbound side.
 flowchart LR
     Stick["Virtual Joystick"] -->|"x, y"| DriveCtrl["DriveController"]
     Speed["Speed / Lights / Servo controls"] --> DriveCtrl
-    DriveCtrl -->|"throttled ≤15/s\nepsilon-filtered"| Protocol1["CarProtocol.build*()"]
-    Protocol1 -->|"CMD:DRIVE;L:70;R:-40"| Transport1["Transport.send()"]
+    DriveCtrl -->|"throttled max 15 per sec\nepsilon-filtered"| Protocol1["CarProtocol.build*()"]
+    Protocol1 -->|"CMD:DRIVE, L:70, R:-40"| Transport1["Transport.send()"]
     Transport1 -->|"BLE write"| ESP32["ESP32 firmware"]
 
     ESP32 -->|"BLE notify"| Transport2["Transport.subscribe()"]
-    Transport2 -->|"DATA;BAT:82;DIST:64;…"| Protocol2["CarProtocol.parseFrame()"]
+    Transport2 -->|"DATA, BAT:82, DIST:64, ..."| Protocol2["CarProtocol.parseFrame()"]
     Protocol2 -->|"TelemetryFrame"| TelemetryCtrl["TelemetryController"]
     Protocol2 -->|"AckFrame"| AckState["lastAckProvider"]
     Protocol2 -->|"ErrorFrame"| ErrorState["vehicleErrorProvider"]
@@ -234,7 +234,7 @@ sequenceDiagram
     ESP32-->>Transport: connected
     Transport-->>ConnCtrl: TransportStatus.connected
     ConnCtrl->>ConnCtrl: save RememberedVehicle
-    ConnCtrl->>ESP32: CMD:CONFIG;TIMEOUT:750 (watchdog window)
+    ConnCtrl->>ESP32: CMD:CONFIG, TIMEOUT:750 (watchdog window)
     ConnCtrl-->>ConnectScreen: LinkState(connected)
 ```
 
@@ -255,9 +255,9 @@ sequenceDiagram
     Joystick->>DriveCtrl: updateJoystick(x, y)
     DriveCtrl->>DriveCtrl: MotorMath (dead zone, ramp, clamp)
     DriveCtrl->>Protocol: buildDriveCommand(left, right)
-    Protocol->>ESP32: CMD:DRIVE;L:70;R:-40 (≤15/s, epsilon-filtered)
+    Protocol->>ESP32: CMD:DRIVE, L:70, R:-40 (max 15 per sec, epsilon-filtered)
     ESP32->>ESP32: apply to motors, arm watchdog
-    ESP32-->>TelemetryCtrl: DATA;BAT:82;DIST:64;SERVO:90
+    ESP32-->>TelemetryCtrl: DATA, BAT:82, DIST:64, SERVO:90
     TelemetryCtrl->>Perception: ingest(telemetry, settings)
     Perception-->>HUD: PerceptionSnapshot (filtered distance, TTC)
     TelemetryCtrl-->>HUD: Telemetry
