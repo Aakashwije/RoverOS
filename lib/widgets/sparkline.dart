@@ -43,8 +43,7 @@ class Sparkline extends StatelessWidget {
   /// empty state instead of a misleading single segment.
   static const int minimumPoints = 2;
 
-  bool get _hasTrend =>
-      values.whereType<double>().length >= minimumPoints;
+  bool get _hasTrend => values.whereType<double>().length >= minimumPoints;
 
   @override
   Widget build(BuildContext context) {
@@ -156,17 +155,11 @@ class _SparklinePainter extends CustomPainter {
 
     if (showFill) {
       final fill = Paint()
-        ..shader =
-            LinearGradient(
-              begin: Alignment.topCenter,
-              end: Alignment.bottomCenter,
-              colors: [
-                color.withValues(alpha: 0.28),
-                color.withValues(alpha: 0),
-              ],
-            ).createShader(
-              Rect.fromLTWH(0, 0, size.width, size.height),
-            );
+        ..shader = LinearGradient(
+          begin: Alignment.topCenter,
+          end: Alignment.bottomCenter,
+          colors: [color.withValues(alpha: 0.28), color.withValues(alpha: 0)],
+        ).createShader(Rect.fromLTWH(0, 0, size.width, size.height));
 
       for (final run in runs) {
         final path = Path()..moveTo(run.first.dx, size.height);

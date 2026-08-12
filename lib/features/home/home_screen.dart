@@ -334,11 +334,9 @@ class _PrimaryAction extends StatelessWidget {
           : AppButtonVariant.secondary,
       onPressed: action.isWaiting ? null : onPressed,
       semanticLabel: switch (action) {
-        HomeAction.drive ||
-        HomeAction.driveWithCare =>
+        HomeAction.drive || HomeAction.driveWithCare =>
           'Start driving. Opens the landscape drive controls',
-        HomeAction.connect ||
-        HomeAction.reconnect =>
+        HomeAction.connect || HomeAction.reconnect =>
           'Connect vehicle. Opens the Bluetooth connection screen',
         HomeAction.resolveFault =>
           'Review telemetry. Opens the full telemetry dashboard',

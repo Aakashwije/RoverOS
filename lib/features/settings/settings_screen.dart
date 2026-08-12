@@ -287,8 +287,9 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                 valueFormatter: (v) => '${v.toStringAsFixed(1)}×',
                 helperText:
                     'Higher values respond more aggressively off-centre.',
-                onChanged: (value) =>
-                    controller.update((s) => s.copyWith(joystickSensitivity: value)),
+                onChanged: (value) => controller.update(
+                  (s) => s.copyWith(joystickSensitivity: value),
+                ),
               ),
               const SizedBox(height: AppSpacing.lg),
               AppSlider(
@@ -315,8 +316,9 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                 unit: '%/s',
                 helperText:
                     'How quickly output rises toward the stick position.',
-                onChanged: (value) =>
-                    controller.update((s) => s.copyWith(accelerationRate: value)),
+                onChanged: (value) => controller.update(
+                  (s) => s.copyWith(accelerationRate: value),
+                ),
               ),
               const SizedBox(height: AppSpacing.lg),
               AppSlider(
@@ -328,8 +330,9 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                 divisions: 19,
                 unit: '%/s',
                 helperText: 'How quickly output falls when easing off.',
-                onChanged: (value) =>
-                    controller.update((s) => s.copyWith(decelerationRate: value)),
+                onChanged: (value) => controller.update(
+                  (s) => s.copyWith(decelerationRate: value),
+                ),
               ),
             ],
           ),
@@ -394,8 +397,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                 divisions: 39,
                 unit: 'cm',
                 color: AppColors.info,
-                helperText:
-                    'Closest the vehicle will approach while avoiding.',
+                helperText: 'Closest the vehicle will approach while avoiding.',
                 onChanged: (value) => controller.update(
                   (s) => s.copyWith(minObstacleDistanceCm: value.round()),
                 ),
@@ -524,8 +526,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
             max: SettingsRange.maxBrightness.toDouble(),
             divisions: 18,
             unit: '%',
-            helperText:
-                'Requires PWM-capable headlight wiring on the vehicle.',
+            helperText: 'Requires PWM-capable headlight wiring on the vehicle.',
             onChanged: (value) => controller.update(
               (s) => s.copyWith(lightBrightness: value.round()),
             ),

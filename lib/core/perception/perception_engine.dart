@@ -99,8 +99,7 @@ class PerceptionEngine {
 
     final forwardBearing = _bucket(settings.servoCenter);
     final forwardCandidate = _filters[forwardBearing]?.latest;
-    final forward =
-        forwardCandidate != null && !forwardCandidate.isStaleAt(now)
+    final forward = forwardCandidate != null && !forwardCandidate.isStaleAt(now)
         ? forwardCandidate
         : null;
 

@@ -123,13 +123,16 @@ void main() {
       }
     });
 
-    test('caution and danger are far apart, being the safety-critical pair', () {
-      // Amber and red collapse onto one another for red-green dichromats no
-      // matter how they are chosen, so luminance is the only channel left to
-      // separate them in. Shape and wording carry the rest.
-      final ratio = ColorContrast.ratio(AppColors.caution, AppColors.danger);
-      expect(ratio, greaterThanOrEqualTo(1.9));
-    });
+    test(
+      'caution and danger are far apart, being the safety-critical pair',
+      () {
+        // Amber and red collapse onto one another for red-green dichromats no
+        // matter how they are chosen, so luminance is the only channel left to
+        // separate them in. Shape and wording carry the rest.
+        final ratio = ColorContrast.ratio(AppColors.caution, AppColors.danger);
+        expect(ratio, greaterThanOrEqualTo(1.9));
+      },
+    );
   });
 
   group('shape carries meaning where colour cannot', () {
@@ -150,8 +153,14 @@ void main() {
 
   group('ColorContrast maths', () {
     test('matches the WCAG reference values', () {
-      expect(ColorContrast.ratio(Colors.white, Colors.black), closeTo(21, 0.01));
-      expect(ColorContrast.ratio(Colors.white, Colors.white), closeTo(1, 0.001));
+      expect(
+        ColorContrast.ratio(Colors.white, Colors.black),
+        closeTo(21, 0.01),
+      );
+      expect(
+        ColorContrast.ratio(Colors.white, Colors.white),
+        closeTo(1, 0.001),
+      );
       expect(ColorContrast.relativeLuminance(Colors.white), closeTo(1, 0.001));
       expect(ColorContrast.relativeLuminance(Colors.black), closeTo(0, 0.001));
     });

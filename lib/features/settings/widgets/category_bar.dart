@@ -61,9 +61,9 @@ class _CategoryBarState extends State<CategoryBar> {
       if (box is! RenderBox || !box.attached) return;
 
       final position = _controller.position;
-      final target = RenderAbstractViewport.of(box)
-          .getOffsetToReveal(box, 0.5)
-          .offset;
+      final target = RenderAbstractViewport.of(
+        box,
+      ).getOffsetToReveal(box, 0.5).offset;
 
       _controller.animateTo(
         target.clamp(position.minScrollExtent, position.maxScrollExtent),

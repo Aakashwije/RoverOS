@@ -53,9 +53,7 @@ class _DemoModeSheetState extends ConsumerState<DemoModeSheet> {
 
   @override
   Widget build(BuildContext context) {
-    final isMockMode = ref.watch(
-      settingsProvider.select((s) => s.mockMode),
-    );
+    final isMockMode = ref.watch(settingsProvider.select((s) => s.mockMode));
     final link = ref.watch(connectionProvider);
     final mock = _mock;
 

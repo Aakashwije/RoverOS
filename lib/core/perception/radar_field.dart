@@ -546,7 +546,8 @@ abstract final class RadarField {
       if (next != null &&
           segment.kind == SurfaceKind.wall &&
           next.kind == SurfaceKind.wall &&
-          _angleBetween(segment, next) >= AppConfig.perceptionCornerMinDegrees) {
+          _angleBetween(segment, next) >=
+              AppConfig.perceptionCornerMinDegrees) {
         surfaces.add(
           RadarSurface(
             kind: SurfaceKind.corner,
@@ -609,10 +610,16 @@ abstract final class RadarField {
 
   static void _mark(List<bool> sectors, int centreDegrees, double spread) {
     const step = AppConfig.perceptionSectorDegrees;
-    final low = clampInt(((centreDegrees - spread) / step).floor(), 0,
-        sectors.length - 1);
-    final high = clampInt(((centreDegrees + spread) / step).ceil(), 0,
-        sectors.length - 1);
+    final low = clampInt(
+      ((centreDegrees - spread) / step).floor(),
+      0,
+      sectors.length - 1,
+    );
+    final high = clampInt(
+      ((centreDegrees + spread) / step).ceil(),
+      0,
+      sectors.length - 1,
+    );
     for (var i = low; i <= high; i++) {
       sectors[i] = true;
     }
@@ -653,7 +660,7 @@ class _Return {
 /// A run of returns after splitting, with the shape it resolved to.
 class _Segment {
   _Segment(this.points, double tolerance)
-    : assert(points.length != 0, 'a segment needs at least one return'),
+    : assert(points.isNotEmpty, 'a segment needs at least one return'),
       deviationCm = _deviationOf(points),
       _extentCm = _extentOf(points) {
     final first = points.first;
@@ -689,10 +696,8 @@ class _Segment {
 
   int get startDegrees => points.first.angleDegrees;
   int get endDegrees => points.last.angleDegrees;
-  int get nearestCm => points
-      .map((p) => p.distanceCm)
-      .reduce((a, b) => math.min(a, b))
-      .round();
+  int get nearestCm =>
+      points.map((p) => p.distanceCm).reduce((a, b) => math.min(a, b)).round();
 
   static double _deviationOf(List<_Return> points) {
     if (points.length < 3) return 0;

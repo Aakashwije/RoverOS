@@ -173,11 +173,7 @@ void main() {
       onChanged: (_) {},
       options: [
         for (final option in AutoBehaviour.values)
-          SegmentOption(
-            value: option,
-            label: option.label,
-            icon: option.icon,
-          ),
+          SegmentOption(value: option, label: option.label, icon: option.icon),
       ],
     ),
     'Sparkline': const Sparkline(

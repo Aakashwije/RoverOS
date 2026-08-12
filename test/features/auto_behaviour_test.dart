@@ -43,10 +43,9 @@ void main() {
   });
 
   test('only obstacle avoidance asks before it starts', () {
-    expect(
-      AutoBehaviour.values.where((b) => b.requiresConfirmation),
-      [AutoBehaviour.avoid],
-    );
+    expect(AutoBehaviour.values.where((b) => b.requiresConfirmation), [
+      AutoBehaviour.avoid,
+    ]);
   });
 
   test('every behaviour has copy for the segment and the caption', () {

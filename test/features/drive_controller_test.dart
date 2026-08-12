@@ -134,6 +134,20 @@ void main() {
     expect(container.read(driveProvider).speedPercent, 0);
   });
 
+  test('setSignalMode sends the side signal command', () async {
+    await connect();
+    final transport = container.read(transportProvider) as MockTransport;
+    final frames = <String>[];
+    final subscription = transport.subscribe().listen(frames.add);
+
+    container.read(driveProvider.notifier).setSignalMode(SignalMode.left);
+    await Future<void>.delayed(const Duration(milliseconds: 50));
+    await subscription.cancel();
+
+    expect(container.read(driveProvider).signalMode, SignalMode.left);
+    expect(frames.any((f) => f == 'ACK:SIGNAL'), isTrue);
+  });
+
   test(
     'the mock transport enforces its own watchdog independent of the app',
     () async {

@@ -22,13 +22,21 @@ import '../settings/settings_controller.dart';
 /// glancing down needs the answer, not the evidence.
 enum DriveArmState {
   /// Input accepted, motors idle.
-  ready('READY', 'Input accepted. The vehicle is stationary.', StatusLevel.neutral),
+  ready(
+    'READY',
+    'Input accepted. The vehicle is stationary.',
+    StatusLevel.neutral,
+  ),
 
   /// The stick is held or the motors are turning.
   armed('ARMED', 'The vehicle is under power.', StatusLevel.good),
 
   /// Emergency stop is latched; input is refused until it is released.
-  stopped('STOPPED', 'Emergency stop latched. Release it to drive.', StatusLevel.danger),
+  stopped(
+    'STOPPED',
+    'Emergency stop latched. Release it to drive.',
+    StatusLevel.danger,
+  ),
 
   /// Firmware is driving; the joystick is deliberately inert.
   autonomous('AUTONOMOUS', 'The vehicle is driving itself.', StatusLevel.info);
@@ -57,6 +65,7 @@ class DriveState {
     this.output = MotorOutput.stopped,
     this.speedPercent = 70,
     this.lightMode = LightMode.off,
+    this.signalMode = SignalMode.off,
     this.driveMode = DriveMode.manual,
     this.scanMode = ScanMode.off,
     this.isEmergencyStopped = false,
@@ -70,6 +79,7 @@ class DriveState {
   final int speedPercent;
 
   final LightMode lightMode;
+  final SignalMode signalMode;
   final DriveMode driveMode;
   final ScanMode scanMode;
 
@@ -102,6 +112,7 @@ class DriveState {
     MotorOutput? output,
     int? speedPercent,
     LightMode? lightMode,
+    SignalMode? signalMode,
     DriveMode? driveMode,
     ScanMode? scanMode,
     bool? isEmergencyStopped,
@@ -112,6 +123,7 @@ class DriveState {
       output: output ?? this.output,
       speedPercent: speedPercent ?? this.speedPercent,
       lightMode: lightMode ?? this.lightMode,
+      signalMode: signalMode ?? this.signalMode,
       driveMode: driveMode ?? this.driveMode,
       scanMode: scanMode ?? this.scanMode,
       isEmergencyStopped: isEmergencyStopped ?? this.isEmergencyStopped,
@@ -383,6 +395,12 @@ class DriveController extends Notifier<DriveState> {
     state = state.copyWith(lightMode: mode);
     // One frame names the mode; the ESP32 owns all flash timing from here.
     _send(CarProtocol.buildLightCommand(mode));
+  }
+
+  void setSignalMode(SignalMode mode) {
+    if (mode == state.signalMode) return;
+    state = state.copyWith(signalMode: mode);
+    _send(CarProtocol.buildSignalCommand(mode));
   }
 
   void setServoAngle(int angle) => _send(CarProtocol.buildServoCommand(angle));

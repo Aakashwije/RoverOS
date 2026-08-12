@@ -231,9 +231,7 @@ class _SpacedWordmark extends StatelessWidget {
         );
         return Text(
           AppConfig.appName,
-          style: AppTypography.wordmark.copyWith(
-            letterSpacing: 2 + 4 * t,
-          ),
+          style: AppTypography.wordmark.copyWith(letterSpacing: 2 + 4 * t),
         );
       },
     );

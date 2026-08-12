@@ -71,6 +71,14 @@ abstract final class CarProtocol {
     });
   }
 
+  /// `CMD:SIGNAL;MODE:<mode>`.
+  ///
+  /// The OP0148 has side-based signal outputs: left means both front-left and
+  /// rear-left lamps, right means both front-right and rear-right lamps.
+  static CarCommand buildSignalCommand(SignalMode mode) {
+    return _command(Wire.verbSignal, {Wire.keyMode: mode.wire});
+  }
+
   /// `CMD:SERVO;ANGLE:<0-180>`.
   static CarCommand buildServoCommand(int angle) =>
       _command(Wire.verbServo, {Wire.keyAngle: clampInt(angle, 0, 180)});
@@ -253,11 +261,15 @@ abstract final class CarProtocol {
 
     final driveMode = DriveMode.tryParse(fields[Wire.keyMode]);
     final lightMode = LightMode.tryParse(fields[Wire.keyLight]);
+    final signalMode = SignalMode.tryParse(fields[Wire.keySignalMode]);
     final vehicleState = VehicleState.tryParse(fields[Wire.keyState]);
+    final brakeLight = _parseBool(fields[Wire.keyBrake]);
     final decision = fields[Wire.keyDecision];
     if (driveMode != null ||
         lightMode != null ||
+        signalMode != null ||
         vehicleState != null ||
+        brakeLight != null ||
         decision != null) {
       recognised = true;
     }
@@ -298,6 +310,8 @@ abstract final class CarProtocol {
       rightMotor: right,
       driveMode: driveMode,
       lightMode: lightMode,
+      signalMode: signalMode,
+      brakeLightOn: brakeLight,
       vehicleState: vehicleState,
       signalPercent: signal,
       radarSamples: samples,
@@ -356,6 +370,18 @@ abstract final class CarProtocol {
       fields[key] = value;
     }
     return fields;
+  }
+
+  static bool? _parseBool(String? raw) {
+    if (raw == null) return null;
+    final normalized = raw.trim().toUpperCase();
+    if (normalized == '1' || normalized == 'ON' || normalized == 'TRUE') {
+      return true;
+    }
+    if (normalized == '0' || normalized == 'OFF' || normalized == 'FALSE') {
+      return false;
+    }
+    return null;
   }
 
   /// `SENSOR_FAIL` → `Sensor fail`, so firmware tokens read as sentences.

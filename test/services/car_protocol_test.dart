@@ -53,6 +53,17 @@ void main() {
       );
     });
 
+    test('signal command names side or hazard mode', () {
+      expect(
+        CarProtocol.buildSignalCommand(SignalMode.left).readable,
+        'CMD:SIGNAL;MODE:LEFT',
+      );
+      expect(
+        CarProtocol.buildSignalCommand(SignalMode.hazard).readable,
+        'CMD:SIGNAL;MODE:HAZARD',
+      );
+    });
+
     test('servo command clamps to the physical 0-180 range', () {
       expect(
         CarProtocol.buildServoCommand(120).readable,
@@ -99,6 +110,7 @@ void main() {
         CarProtocol.buildStopCommand(),
         CarProtocol.buildSpeedCommand(50),
         CarProtocol.buildLightCommand(LightMode.hazard),
+        CarProtocol.buildSignalCommand(SignalMode.right),
         CarProtocol.buildServoCommand(90),
         CarProtocol.buildModeCommand(DriveMode.autoScan),
         CarProtocol.buildScanCommand(ScanMode.once),
@@ -150,14 +162,16 @@ void main() {
       expect(telemetry.updatedAt, isNotNull);
     });
 
-    test('reads motor, light and signal fields', () {
+    test('reads motor, light, signal-light and link-signal fields', () {
       final telemetry = CarProtocol.parseTelemetry(
-        'DATA;L:70;R:80;LIGHT:ON;SIG:90',
+        'DATA;L:70;R:80;LIGHT:ON;SIGNAL:LEFT;BRAKE:1;SIG:90',
       )!;
 
       expect(telemetry.leftMotor, 70);
       expect(telemetry.rightMotor, 80);
       expect(telemetry.lightMode, LightMode.on);
+      expect(telemetry.signalMode, SignalMode.left);
+      expect(telemetry.brakeLightOn, isTrue);
       expect(telemetry.signalPercent, 90);
     });
 

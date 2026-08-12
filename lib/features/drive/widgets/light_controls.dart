@@ -86,6 +86,7 @@ class LightControls extends StatelessWidget {
             label: entry.label,
             isActive: entry.mode == mode,
             isHazard: entry.mode == LightMode.hazard,
+            semanticPrefix: 'Headlight mode',
             onTap: enabled ? () => onChanged(entry.mode) : null,
           ),
       ],
@@ -99,6 +100,7 @@ class _LightModeChip extends StatelessWidget {
     required this.label,
     required this.isActive,
     required this.isHazard,
+    required this.semanticPrefix,
     required this.onTap,
   });
 
@@ -106,6 +108,7 @@ class _LightModeChip extends StatelessWidget {
   final String label;
   final bool isActive;
   final bool isHazard;
+  final String semanticPrefix;
   final VoidCallback? onTap;
 
   @override
@@ -121,7 +124,7 @@ class _LightModeChip extends StatelessWidget {
       button: true,
       selected: isActive,
       enabled: onTap != null,
-      label: 'Headlight mode $label',
+      label: '$semanticPrefix $label',
       child: ExcludeSemantics(
         child: GestureDetector(
           onTap: onTap,
@@ -149,6 +152,88 @@ class _LightModeChip extends StatelessWidget {
           ),
         ),
       ),
+    );
+  }
+}
+
+class SignalControls extends StatelessWidget {
+  const SignalControls({
+    super.key,
+    required this.mode,
+    required this.onChanged,
+    this.enabled = true,
+    this.compact = false,
+  });
+
+  final SignalMode mode;
+  final ValueChanged<SignalMode> onChanged;
+  final bool enabled;
+  final bool compact;
+
+  static const List<({SignalMode mode, IconData icon, String label})> _modes = [
+    (
+      mode: SignalMode.left,
+      icon: Icons.keyboard_arrow_left_rounded,
+      label: 'LEFT',
+    ),
+    (
+      mode: SignalMode.hazard,
+      icon: Icons.warning_amber_rounded,
+      label: 'HAZARD',
+    ),
+    (
+      mode: SignalMode.right,
+      icon: Icons.keyboard_arrow_right_rounded,
+      label: 'RIGHT',
+    ),
+  ];
+
+  @override
+  Widget build(BuildContext context) {
+    if (compact) {
+      return Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          for (final entry in _modes) ...[
+            AppIconButton(
+              icon: entry.icon,
+              semanticLabel: entry.mode == mode
+                  ? 'Turn ${entry.label.toLowerCase()} signal off'
+                  : 'Turn ${entry.label.toLowerCase()} signal on',
+              tooltip: entry.label,
+              size: 48,
+              isActive: entry.mode == mode,
+              activeColor: AppColors.caution,
+              onPressed: enabled
+                  ? () => onChanged(
+                      entry.mode == mode ? SignalMode.off : entry.mode,
+                    )
+                  : null,
+            ),
+            if (entry != _modes.last) const SizedBox(width: AppSpacing.sm),
+          ],
+        ],
+      );
+    }
+
+    return Wrap(
+      spacing: AppSpacing.sm,
+      runSpacing: AppSpacing.sm,
+      children: [
+        for (final entry in _modes)
+          _LightModeChip(
+            icon: entry.icon,
+            label: entry.label,
+            isActive: entry.mode == mode,
+            isHazard: true,
+            semanticPrefix: 'Signal mode',
+            onTap: enabled
+                ? () => onChanged(
+                    entry.mode == mode ? SignalMode.off : entry.mode,
+                  )
+                : null,
+          ),
+      ],
     );
   }
 }

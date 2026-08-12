@@ -56,7 +56,11 @@ class TwoPane extends StatelessWidget {
           return Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             mainAxisSize: MainAxisSize.min,
-            children: [primary, SizedBox(height: spacing), secondary],
+            children: [
+              primary,
+              SizedBox(height: spacing),
+              secondary,
+            ],
           );
         }
 
@@ -78,11 +82,7 @@ class TwoPane extends StatelessWidget {
 /// A settings list stretched across a 1200dp window is unreadable; this keeps
 /// the line length sane without special-casing every screen.
 class PageConstraints extends StatelessWidget {
-  const PageConstraints({
-    super.key,
-    required this.child,
-    this.maxWidth = 1100,
-  });
+  const PageConstraints({super.key, required this.child, this.maxWidth = 1100});
 
   final Widget child;
   final double maxWidth;

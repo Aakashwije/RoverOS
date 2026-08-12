@@ -84,8 +84,7 @@ class DistanceEstimate {
   bool get isClosing =>
       velocityCmPerSecond <= -AppConfig.perceptionMinClosingCmPerSecond;
 
-  double get closingSpeedCmPerSecond =>
-      isClosing ? -velocityCmPerSecond : 0;
+  double get closingSpeedCmPerSecond => isClosing ? -velocityCmPerSecond : 0;
 
   /// Time until this bearing's obstacle is reached at the current closing
   /// speed, or `null` when nothing is closing fast enough to matter.
@@ -151,7 +150,8 @@ class DistanceFilter {
     double? measurementNoiseFraction,
     double? manoeuvreNoiseCmPerSecondSquared,
   }) : _noiseCm = measurementNoiseCm ?? AppConfig.sensorNoiseCm,
-       _noiseFraction = measurementNoiseFraction ?? AppConfig.sensorNoiseFraction,
+       _noiseFraction =
+           measurementNoiseFraction ?? AppConfig.sensorNoiseFraction,
        _manoeuvreNoise =
            manoeuvreNoiseCmPerSecondSquared ??
            AppConfig.perceptionManoeuvreNoiseCmPerSecondSquared;
@@ -207,7 +207,8 @@ class DistanceFilter {
     // has come back. Coasting a two-second-old velocity across that gap would
     // put the estimate somewhere the rover never was.
     if (_seeded &&
-        elapsed * 1000 >= AppConfig.perceptionBearingStaleAfter.inMilliseconds) {
+        elapsed * 1000 >=
+            AppConfig.perceptionBearingStaleAfter.inMilliseconds) {
       reset(keepEchoRecord: true);
     }
 

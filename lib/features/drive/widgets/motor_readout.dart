@@ -65,11 +65,7 @@ class MotorReadout extends StatelessWidget {
           'right ${output.right} percent',
       child: ExcludeSemantics(
         child: pulseOnChange
-            ? PulseOnChange(
-                value: output,
-                enabled: enabled,
-                child: readout,
-              )
+            ? PulseOnChange(value: output, enabled: enabled, child: readout)
             : readout,
       ),
     );
@@ -102,10 +98,7 @@ class _Side extends StatelessWidget {
       children: [
         Row(
           children: [
-            Text(
-              label,
-              style: AppTypography.label.copyWith(fontSize: 9),
-            ),
+            Text(label, style: AppTypography.label.copyWith(fontSize: 9)),
             const Spacer(),
             Text(
               value == 0 ? '0' : '${value > 0 ? '+' : ''}$value',
@@ -115,10 +108,7 @@ class _Side extends StatelessWidget {
               ),
             ),
             const SizedBox(width: 1),
-            Text(
-              '%',
-              style: AppTypography.metricUnit.copyWith(fontSize: 10),
-            ),
+            Text('%', style: AppTypography.metricUnit.copyWith(fontSize: 10)),
           ],
         ),
         const SizedBox(height: 4),

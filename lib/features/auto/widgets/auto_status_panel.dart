@@ -327,7 +327,8 @@ class _PerceptionReadout extends StatelessWidget {
           ),
           const SizedBox(height: AppSpacing.sm),
           Text(
-            assessment?.detail ?? 'Advisory radar analysis from phone-side filtering',
+            assessment?.detail ??
+                'Advisory radar analysis from phone-side filtering',
             style: AppTypography.bodySmall.copyWith(fontSize: 11.5),
           ),
           if (gap != null) ...[

@@ -29,6 +29,32 @@ enum LightMode {
   }
 }
 
+/// Turn-signal behaviour. The OP0148 board exposes one signal output per side:
+/// left drives both front-left and rear-left lamps, right drives both
+/// front-right and rear-right lamps.
+enum SignalMode {
+  off(Wire.signalOff, 'OFF'),
+  left(Wire.signalLeft, 'LEFT'),
+  right(Wire.signalRight, 'RIGHT'),
+  hazard(Wire.signalHazard, 'HAZARD');
+
+  const SignalMode(this.wire, this.label);
+
+  final String wire;
+  final String label;
+
+  bool get isEmitting => this != off;
+
+  static SignalMode? tryParse(String? raw) {
+    if (raw == null) return null;
+    final normalized = raw.trim().toUpperCase();
+    for (final mode in values) {
+      if (mode.wire == normalized) return mode;
+    }
+    return null;
+  }
+}
+
 /// Who is driving: the operator, or the vehicle's own logic.
 ///
 /// Autonomous decisions are made on the ESP32. These values only select which

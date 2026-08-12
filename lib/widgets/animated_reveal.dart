@@ -42,10 +42,7 @@ class AnimatedReveal extends StatelessWidget {
         // outgoing and incoming panels aligned with the layout above them.
         layoutBuilder: (currentChild, previousChildren) => Stack(
           alignment: alignment,
-          children: [
-            ...previousChildren,
-            if (currentChild != null) currentChild,
-          ],
+          children: [...previousChildren, ?currentChild],
         ),
         child:
             child ??

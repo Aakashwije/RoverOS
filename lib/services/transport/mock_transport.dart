@@ -62,6 +62,8 @@ class MockTransport implements Transport {
   int _servoAngle = 90;
   double _distanceCm = 140;
   LightMode _lightMode = LightMode.off;
+  SignalMode _signalMode = SignalMode.off;
+  bool _brakeLightOn = false;
   DriveMode _driveMode = DriveMode.manual;
   ScanMode _scanMode = ScanMode.off;
   VehicleState _vehicleState = VehicleState.idle;
@@ -239,6 +241,7 @@ class MockTransport implements Transport {
     _telemetryTimer = null;
     _leftMotor = 0;
     _rightMotor = 0;
+    _brakeLightOn = true;
     _deviceId = null;
     _vehicleState = VehicleState.idle;
     _setStatus(TransportStatus.disconnected);
@@ -293,6 +296,7 @@ class MockTransport implements Transport {
     _deviceId = null;
     _leftMotor = 0;
     _rightMotor = 0;
+    _brakeLightOn = true;
     _setStatus(TransportStatus.disconnected);
   }
 
@@ -322,6 +326,7 @@ class MockTransport implements Transport {
         }
         _leftMotor = clampMotor(left);
         _rightMotor = clampMotor(right);
+        _brakeLightOn = _leftMotor == 0 && _rightMotor == 0;
         _lastDriveAt = DateTime.now();
         _vehicleState = (_leftMotor == 0 && _rightMotor == 0)
             ? VehicleState.stopped
@@ -331,6 +336,7 @@ class MockTransport implements Transport {
       case Wire.verbStop:
         _leftMotor = 0;
         _rightMotor = 0;
+        _brakeLightOn = true;
         _vehicleState = VehicleState.stopped;
         _decision = null;
         _ack(Wire.verbStop);
@@ -344,6 +350,10 @@ class MockTransport implements Transport {
       case Wire.verbLight:
         _lightMode = LightMode.tryParse(fields[Wire.keyMode]) ?? _lightMode;
         _ack(Wire.verbLight);
+
+      case Wire.verbSignal:
+        _signalMode = SignalMode.tryParse(fields[Wire.keyMode]) ?? _signalMode;
+        _ack(Wire.verbSignal);
 
       case Wire.verbServo:
         _servoAngle = clampInt(
@@ -362,7 +372,10 @@ class MockTransport implements Transport {
         if (!_driveMode.isAutonomous) {
           _leftMotor = 0;
           _rightMotor = 0;
+          _brakeLightOn = true;
           _decision = null;
+        } else {
+          _brakeLightOn = false;
         }
         _ack(Wire.verbMode);
 
@@ -381,6 +394,7 @@ class MockTransport implements Transport {
         final target = fields[Wire.keyTarget];
         _leftMotor = target == Wire.targetRight ? 0 : clampPercent(percent);
         _rightMotor = target == Wire.targetLeft ? 0 : clampPercent(percent);
+        _brakeLightOn = _leftMotor == 0 && _rightMotor == 0;
         _lastDriveAt = DateTime.now();
         _vehicleState = VehicleState.driving;
         _ack(Wire.verbTestMotor);
@@ -418,6 +432,7 @@ class MockTransport implements Transport {
 
     _leftMotor = 0;
     _rightMotor = 0;
+    _brakeLightOn = true;
     _vehicleState = VehicleState.stopped;
     _emit(
       '${Wire.prefixError}${Wire.fieldSeparator}'
@@ -465,6 +480,7 @@ class MockTransport implements Transport {
       _decision = _servoAngle < 90 ? 'TURN RIGHT' : 'TURN LEFT';
       _leftMotor = _servoAngle < 90 ? 55 : -55;
       _rightMotor = _servoAngle < 90 ? -55 : 55;
+      _brakeLightOn = false;
       _vehicleState = VehicleState.avoiding;
       _distanceCm += 4;
     } else {
@@ -472,6 +488,7 @@ class MockTransport implements Transport {
       final cruise = (_speedCeiling * 0.7).round();
       _leftMotor = cruise;
       _rightMotor = cruise;
+      _brakeLightOn = false;
       _vehicleState = VehicleState.driving;
     }
     _lastDriveAt = DateTime.now();
@@ -500,6 +517,8 @@ class MockTransport implements Transport {
     field(Wire.keyRight, _rightMotor);
     field(Wire.keyMode, _driveMode.wire);
     field(Wire.keyLight, _lightMode.wire);
+    field(Wire.keySignalMode, _signalMode.wire);
+    field(Wire.keyBrake, _brakeLightOn ? 1 : 0);
     field(Wire.keyState, _vehicleState.wire);
     field(Wire.keySignal, 88 + _random.nextInt(10));
     if (_decision != null) field(Wire.keyDecision, _decision!);

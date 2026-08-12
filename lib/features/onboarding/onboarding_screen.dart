@@ -89,7 +89,9 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
   }
 
   void _setMockMode(bool value) {
-    ref.read(settingsProvider.notifier).update((s) => s.copyWith(mockMode: value));
+    ref
+        .read(settingsProvider.notifier)
+        .update((s) => s.copyWith(mockMode: value));
     setState(() {});
   }
 

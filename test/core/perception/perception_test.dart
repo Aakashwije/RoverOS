@@ -6,32 +6,35 @@ import 'package:roveros/models/telemetry.dart';
 
 void main() {
   group('ProximityGate', () {
-    test('escalates a safe absolute distance when time-to-contact is critical', () {
-      final gate = ProximityGate();
-      final now = DateTime(2026, 1, 1);
+    test(
+      'escalates a safe absolute distance when time-to-contact is critical',
+      () {
+        final gate = ProximityGate();
+        final now = DateTime(2026, 1, 1);
 
-      final assessment = gate.assess(
-        estimate: DistanceEstimate(
-          bearingDegrees: 90,
-          distanceCm: 80,
-          velocityCmPerSecond: -80,
-          standardDeviationCm: 2,
-          confidenceScore: 0.9,
-          sampleCount: 8,
-          rawCm: 80,
-          wasRejected: false,
-          echoRate: 1,
-          updatedAt: now,
-        ),
-        cautionCm: 60,
-        dangerCm: 30,
-        now: now,
-      );
+        final assessment = gate.assess(
+          estimate: DistanceEstimate(
+            bearingDegrees: 90,
+            distanceCm: 80,
+            velocityCmPerSecond: -80,
+            standardDeviationCm: 2,
+            confidenceScore: 0.9,
+            sampleCount: 8,
+            rawCm: 80,
+            wasRejected: false,
+            echoRate: 1,
+            updatedAt: now,
+          ),
+          cautionCm: 60,
+          dangerCm: 30,
+          now: now,
+        );
 
-      expect(assessment.status, DistanceStatus.danger);
-      expect(assessment.cause, ProximityCause.closingRate);
-      expect(assessment.contactSeconds, '1.0');
-    });
+        expect(assessment.status, DistanceStatus.danger);
+        expect(assessment.cause, ProximityCause.closingRate);
+        expect(assessment.contactSeconds, '1.0');
+      },
+    );
 
     test('requires extra clearance before relaxing from danger', () {
       final gate = ProximityGate();

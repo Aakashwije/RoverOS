@@ -22,8 +22,10 @@ abstract final class SessionLog {
       ..writeln();
 
     buffer
-      ..writeln('TELEMETRY (${history.samples.length} samples, '
-          'every ${TelemetryHistoryController.sampleInterval.inSeconds}s)')
+      ..writeln(
+        'TELEMETRY (${history.samples.length} samples, '
+        'every ${TelemetryHistoryController.sampleInterval.inSeconds}s)',
+      )
       ..writeln('time  battery%  distance_cm  signal%  output%');
     for (final sample in history.samples) {
       final at = sample.at;

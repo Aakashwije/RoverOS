@@ -52,7 +52,10 @@ void main() {
 
     test('a busy link asks the user to wait rather than to tap', () {
       final status = evaluate(
-        const LinkState(status: ConnectionStatus.reconnecting, reconnectAttempt: 2),
+        const LinkState(
+          status: ConnectionStatus.reconnecting,
+          reconnectAttempt: 2,
+        ),
         Telemetry.empty,
       );
       expect(status.action, HomeAction.waitForLink);
@@ -144,8 +147,13 @@ void main() {
   test('every action carries a label and an icon for the primary button', () {
     for (final action in HomeAction.values) {
       expect(action.label, isNotEmpty);
-      expect(action.opensDrive || action.opensConnect || action.isWaiting ||
-          action == HomeAction.resolveFault, isTrue);
+      expect(
+        action.opensDrive ||
+            action.opensConnect ||
+            action.isWaiting ||
+            action == HomeAction.resolveFault,
+        isTrue,
+      );
     }
   });
 }

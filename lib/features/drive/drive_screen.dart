@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../core/perception/perception_engine.dart';
 import '../../core/router/app_router.dart';
 import '../../core/theme/app_theme.dart';
 import '../../models/commands.dart';
@@ -107,6 +108,11 @@ class _DriveScreenState extends ConsumerState<DriveScreen>
     ref.read(driveProvider.notifier).setLightMode(mode);
   }
 
+  void _onSignalMode(SignalMode mode) {
+    Haptics.selection(enabled: ref.read(settingsProvider).hapticsEnabled);
+    ref.read(driveProvider.notifier).setSignalMode(mode);
+  }
+
   void _swapJoystickSide() {
     final controller = ref.read(settingsProvider.notifier);
     Haptics.selection(enabled: ref.read(settingsProvider).hapticsEnabled);
@@ -158,16 +164,42 @@ class _DriveScreenState extends ConsumerState<DriveScreen>
     AppBottomSheet.show<void>(
       context,
       title: 'Lighting',
-      subtitle: 'Flash timing runs on the vehicle, not the phone',
+      subtitle:
+          'Front lights, brake telemetry, and signal timing run on the vehicle',
       icon: Icons.lightbulb_rounded,
       builder: (sheetContext) => Consumer(
-        builder: (context, ref, _) => LightControls(
-          mode: ref.watch(driveProvider).lightMode,
-          onChanged: (mode) {
-            Haptics.light(enabled: ref.read(settingsProvider).hapticsEnabled);
-            ref.read(driveProvider.notifier).setLightMode(mode);
-          },
-        ),
+        builder: (context, ref, _) {
+          final drive = ref.watch(driveProvider);
+          return Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text('FRONT LIGHTS', style: AppTypography.label),
+              const SizedBox(height: AppSpacing.sm),
+              LightControls(
+                mode: drive.lightMode,
+                onChanged: (mode) {
+                  Haptics.light(
+                    enabled: ref.read(settingsProvider).hapticsEnabled,
+                  );
+                  ref.read(driveProvider.notifier).setLightMode(mode);
+                },
+              ),
+              const SizedBox(height: AppSpacing.xl),
+              Text('SIGNALS', style: AppTypography.label),
+              const SizedBox(height: AppSpacing.sm),
+              SignalControls(
+                mode: drive.signalMode,
+                onChanged: (mode) {
+                  Haptics.selection(
+                    enabled: ref.read(settingsProvider).hapticsEnabled,
+                  );
+                  ref.read(driveProvider.notifier).setSignalMode(mode);
+                },
+              ),
+            ],
+          );
+        },
       ),
     );
   }
@@ -249,6 +281,7 @@ class _DriveScreenState extends ConsumerState<DriveScreen>
                 onOpenLights: _openLightSheet,
                 onOpenServo: _openServoSheet,
                 onLightMode: _onLightMode,
+                onSignalMode: _onSignalMode,
                 onSwapSide: _swapJoystickSide,
                 onExit: () => context.canPop()
                     ? context.pop()
@@ -323,6 +356,7 @@ class _DriveHud extends StatelessWidget {
     required this.onOpenLights,
     required this.onOpenServo,
     required this.onLightMode,
+    required this.onSignalMode,
     required this.onSwapSide,
     required this.onExit,
   });
@@ -341,6 +375,7 @@ class _DriveHud extends StatelessWidget {
   final VoidCallback onOpenLights;
   final VoidCallback onOpenServo;
   final ValueChanged<LightMode> onLightMode;
+  final ValueChanged<SignalMode> onSignalMode;
   final VoidCallback onSwapSide;
   final VoidCallback onExit;
 
@@ -419,6 +454,7 @@ class _DriveHud extends StatelessWidget {
               onEmergencyStop: onEmergencyStop,
               onResetEmergency: onResetEmergency,
               onLightMode: onLightMode,
+              onSignalMode: onSignalMode,
               mirrored: settings.joystickSide == JoystickSide.right,
             ),
           ],
@@ -473,10 +509,7 @@ class _JoystickColumn extends StatelessWidget {
               ),
               if (metrics.showMotorReadout) ...[
                 const SizedBox(height: DriveHudMetrics.columnGap),
-                MotorReadout(
-                  output: drive.output,
-                  enabled: drive.acceptsInput,
-                ),
+                MotorReadout(output: drive.output, enabled: drive.acceptsInput),
               ],
             ],
           ),
@@ -600,7 +633,8 @@ class _HudTopBar extends StatelessWidget {
                 'Joystick is on the ${joystickSide.label.toLowerCase()}. '
                 'Activate to move it to the '
                 '${joystickSide.opposite.label.toLowerCase()}.',
-            tooltip: 'Move joystick to the '
+            tooltip:
+                'Move joystick to the '
                 '${joystickSide.opposite.label.toLowerCase()}',
             size: 42,
             onPressed: onSwapSide,
@@ -781,6 +815,7 @@ class _HudBottomBar extends StatelessWidget {
     required this.onEmergencyStop,
     required this.onResetEmergency,
     required this.onLightMode,
+    required this.onSignalMode,
     required this.mirrored,
   });
 
@@ -788,6 +823,7 @@ class _HudBottomBar extends StatelessWidget {
   final VoidCallback onEmergencyStop;
   final VoidCallback onResetEmergency;
   final ValueChanged<LightMode> onLightMode;
+  final ValueChanged<SignalMode> onSignalMode;
 
   /// Keeps the stop zone under the free hand: it sits opposite the joystick,
   /// so the thumb that is not driving is the one that reaches it.
@@ -796,11 +832,7 @@ class _HudBottomBar extends StatelessWidget {
   /// Only three light modes reach the HUD; the flash rates live in the sheet.
   /// Five 48dp buttons plus a horn plus the stop zone does not fit across a
   /// 480dp landscape phone, and silently overflowing is worse than choosing.
-  static const List<LightMode> _hudLightModes = [
-    LightMode.off,
-    LightMode.on,
-    LightMode.hazard,
-  ];
+  static const List<LightMode> _hudLightModes = [LightMode.off, LightMode.on];
 
   @override
   Widget build(BuildContext context) {
@@ -836,6 +868,12 @@ class _HudBottomBar extends StatelessWidget {
                     compact: true,
                     visibleModes: _hudLightModes,
                     onChanged: onLightMode,
+                  ),
+                  const SizedBox(width: AppSpacing.sm),
+                  SignalControls(
+                    mode: drive.signalMode,
+                    compact: true,
+                    onChanged: onSignalMode,
                   ),
                   const SizedBox(width: AppSpacing.sm),
                   // Reserved for a horn/buzzer. The Optimus board in this

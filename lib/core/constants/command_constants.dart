@@ -34,6 +34,7 @@ abstract final class Wire {
   static const String verbStop = 'STOP';
   static const String verbSpeed = 'SPEED';
   static const String verbLight = 'LIGHT';
+  static const String verbSignal = 'SIGNAL';
   static const String verbServo = 'SERVO';
   static const String verbMode = 'MODE';
   static const String verbScan = 'SCAN';
@@ -47,6 +48,7 @@ abstract final class Wire {
     verbStop,
     verbSpeed,
     verbLight,
+    verbSignal,
     verbServo,
     verbMode,
     verbScan,
@@ -82,6 +84,8 @@ abstract final class Wire {
   static const String keyServo = 'SERVO';
   static const String keySpeed = 'SPD';
   static const String keyLight = 'LIGHT';
+  static const String keySignalMode = 'SIGNAL';
+  static const String keyBrake = 'BRAKE';
   static const String keySignal = 'SIG';
   static const String keyDistanceLeft = 'DL';
   static const String keyDistanceCenter = 'DC';
@@ -101,6 +105,11 @@ abstract final class Wire {
   static const String lightFlashSlow = 'FLASH_SLOW';
   static const String lightFlashFast = 'FLASH_FAST';
   static const String lightHazard = 'HAZARD';
+
+  static const String signalOff = 'OFF';
+  static const String signalLeft = 'LEFT';
+  static const String signalRight = 'RIGHT';
+  static const String signalHazard = 'HAZARD';
 
   static const String modeManual = 'MANUAL';
   static const String modeAvoid = 'AVOID';

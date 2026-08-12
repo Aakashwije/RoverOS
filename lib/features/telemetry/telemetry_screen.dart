@@ -293,7 +293,8 @@ class _TelemetryBody extends StatelessWidget {
                       unit: settings.units.shortLabel,
                       icon: Icons.straighten_rounded,
                       level: proximity?.level ?? rawDistanceStatus.level,
-                      statusLabel: proximity?.headline ?? rawDistanceStatus.label,
+                      statusLabel:
+                          proximity?.headline ?? rawDistanceStatus.label,
                       isStale: isStale,
                     ),
                     TelemetryCard(
@@ -346,6 +347,24 @@ class _TelemetryBody extends StatelessWidget {
                 value: (telemetry.lightMode ?? LightMode.off).label,
                 icon: Icons.light_mode_rounded,
                 level: (telemetry.lightMode ?? LightMode.off).isEmitting
+                    ? StatusLevel.caution
+                    : StatusLevel.neutral,
+                isStale: isStale,
+              ),
+              TelemetryCard(
+                label: 'SIGNALS',
+                value: (telemetry.signalMode ?? SignalMode.off).label,
+                icon: Icons.turn_slight_right_rounded,
+                level: (telemetry.signalMode ?? SignalMode.off).isEmitting
+                    ? StatusLevel.caution
+                    : StatusLevel.neutral,
+                isStale: isStale,
+              ),
+              TelemetryCard(
+                label: 'BRAKE',
+                value: telemetry.brakeLightOn == true ? 'ON' : 'OFF',
+                icon: Icons.highlight_rounded,
+                level: telemetry.brakeLightOn == true
                     ? StatusLevel.caution
                     : StatusLevel.neutral,
                 isStale: isStale,

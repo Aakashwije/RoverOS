@@ -114,7 +114,8 @@ class TelemetryHistoryController extends Notifier<TelemetryHistory> {
     final link = ref.read(connectionProvider);
     final output = telemetry.leftMotor == null && telemetry.rightMotor == null
         ? null
-        : ((telemetry.leftMotor ?? 0).abs() + (telemetry.rightMotor ?? 0).abs()) /
+        : ((telemetry.leftMotor ?? 0).abs() +
+                  (telemetry.rightMotor ?? 0).abs()) /
               2;
 
     final sample = TelemetrySample(

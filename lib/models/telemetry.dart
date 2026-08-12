@@ -94,6 +94,8 @@ class Telemetry {
     this.rightMotor,
     this.driveMode,
     this.lightMode,
+    this.signalMode,
+    this.brakeLightOn,
     this.vehicleState,
     this.signalPercent,
     this.radarSamples = const {},
@@ -116,6 +118,8 @@ class Telemetry {
 
   final DriveMode? driveMode;
   final LightMode? lightMode;
+  final SignalMode? signalMode;
+  final bool? brakeLightOn;
   final VehicleState? vehicleState;
 
   /// Link quality as reported by the vehicle, 0–100. The phone's own RSSI is
@@ -177,6 +181,8 @@ class Telemetry {
       rightMotor: update.rightMotor ?? rightMotor,
       driveMode: update.driveMode ?? driveMode,
       lightMode: update.lightMode ?? lightMode,
+      signalMode: update.signalMode ?? signalMode,
+      brakeLightOn: update.brakeLightOn ?? brakeLightOn,
       vehicleState: update.vehicleState ?? vehicleState,
       signalPercent: update.signalPercent ?? signalPercent,
       radarSamples: update.radarSamples.isEmpty
@@ -196,6 +202,8 @@ class Telemetry {
     int? rightMotor,
     DriveMode? driveMode,
     LightMode? lightMode,
+    SignalMode? signalMode,
+    bool? brakeLightOn,
     VehicleState? vehicleState,
     int? signalPercent,
     Map<int, RadarSample>? radarSamples,
@@ -211,6 +219,8 @@ class Telemetry {
       rightMotor: rightMotor ?? this.rightMotor,
       driveMode: driveMode ?? this.driveMode,
       lightMode: lightMode ?? this.lightMode,
+      signalMode: signalMode ?? this.signalMode,
+      brakeLightOn: brakeLightOn ?? this.brakeLightOn,
       vehicleState: vehicleState ?? this.vehicleState,
       signalPercent: signalPercent ?? this.signalPercent,
       radarSamples: radarSamples ?? this.radarSamples,

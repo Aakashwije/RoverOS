@@ -282,9 +282,7 @@ class _RadarPainter extends CustomPainter {
     canvas.drawPath(
       path,
       Paint()
-        ..color = AppColors.accent.withValues(
-          alpha: isSweeping ? 0.16 : 0.08,
-        ),
+        ..color = AppColors.accent.withValues(alpha: isSweeping ? 0.16 : 0.08),
     );
   }
 
@@ -416,12 +414,7 @@ class _RadarPainter extends CustomPainter {
   }
 
   /// Where a reading at [angleDegrees] and [distanceCm] lands on the disc.
-  Offset _plot(
-    Offset origin,
-    double radius,
-    int angleDegrees,
-    int distanceCm,
-  ) {
+  Offset _plot(Offset origin, double radius, int angleDegrees, int distanceCm) {
     final canvasAngle = RadarView.canvasAngleFor(angleDegrees.toDouble());
     final fraction = (distanceCm / maxRangeCm).clamp(0.05, 1.0).toDouble();
     return origin +

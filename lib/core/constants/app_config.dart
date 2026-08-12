@@ -154,7 +154,9 @@ abstract final class AppConfig {
 
   /// Time-to-contact thresholds. These escalate the proximity call regardless
   /// of absolute distance: 30cm at a crawl is fine, 30cm at full tilt is not.
-  static const Duration perceptionContactCritical = Duration(milliseconds: 1200);
+  static const Duration perceptionContactCritical = Duration(
+    milliseconds: 1200,
+  );
   static const Duration perceptionContactWarning = Duration(milliseconds: 2500);
 
   /// Extra clearance required before the proximity call is allowed to *relax*

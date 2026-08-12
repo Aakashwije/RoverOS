@@ -36,8 +36,7 @@ class DistanceCard extends StatelessWidget {
   final bool compact;
   final ProximityAssessment? proximity;
 
-  bool get _isUncertain =>
-      proximity?.cause == ProximityCause.lowConfidence;
+  bool get _isUncertain => proximity?.cause == ProximityCause.lowConfidence;
 
   @override
   Widget build(BuildContext context) {

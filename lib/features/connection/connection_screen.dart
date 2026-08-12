@@ -179,11 +179,11 @@ class _ConnectionScreenState extends ConsumerState<ConnectionScreen>
                           // connection attempt that already knows its target.
                           onRetryDirect: link.hasRememberedDevice
                               ? () => controller.connectTo(
-                                    DiscoveredVehicle(
-                                      id: link.deviceId!,
-                                      name: link.deviceName ?? '',
-                                    ),
-                                  )
+                                  DiscoveredVehicle(
+                                    id: link.deviceId!,
+                                    name: link.deviceName ?? '',
+                                  ),
+                                )
                               : null,
                         ),
                       ),
@@ -197,8 +197,9 @@ class _ConnectionScreenState extends ConsumerState<ConnectionScreen>
                 BluetoothPermissionCard(
                   status: permissionStatus,
                   onRequest: _requestPermission,
-                  onOpenSettings: () =>
-                      ref.read(bluetoothPermissionServiceProvider).openSettings(),
+                  onOpenSettings: () => ref
+                      .read(bluetoothPermissionServiceProvider)
+                      .openSettings(),
                 )
               else ...[
                 AnimatedReveal(
@@ -229,9 +230,7 @@ class _ConnectionScreenState extends ConsumerState<ConnectionScreen>
                       isConnected:
                           link.isConnected && link.deviceId == device.id,
                       onConnect: () {
-                        Haptics.selection(
-                          enabled: settings.hapticsEnabled,
-                        );
+                        Haptics.selection(enabled: settings.hapticsEnabled);
                         controller.connectTo(device);
                       },
                     ),
@@ -265,9 +264,7 @@ class _ConnectionScreenState extends ConsumerState<ConnectionScreen>
                       isConnected:
                           link.isConnected && link.deviceId == device.id,
                       onConnect: () {
-                        Haptics.selection(
-                          enabled: settings.hapticsEnabled,
-                        );
+                        Haptics.selection(enabled: settings.hapticsEnabled);
                         controller.connectTo(device);
                       },
                     ),
@@ -605,11 +602,7 @@ class _EmptyScanState extends StatelessWidget {
 }
 
 class _Check extends StatelessWidget {
-  const _Check({
-    required this.icon,
-    required this.title,
-    required this.detail,
-  });
+  const _Check({required this.icon, required this.title, required this.detail});
 
   final IconData icon;
   final String title;

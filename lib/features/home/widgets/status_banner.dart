@@ -58,7 +58,11 @@ class StatusBanner extends StatelessWidget {
                         borderRadius: BorderRadius.circular(AppRadii.sm),
                       )
                     : null,
-                child: Icon(status.icon, size: isBlocking ? 22 : 20, color: color),
+                child: Icon(
+                  status.icon,
+                  size: isBlocking ? 22 : 20,
+                  color: color,
+                ),
               ),
               const SizedBox(width: AppSpacing.md),
               Expanded(

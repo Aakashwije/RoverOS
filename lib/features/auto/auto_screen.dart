@@ -7,6 +7,7 @@ import '../../core/router/app_router.dart';
 import '../../core/theme/app_theme.dart';
 import '../../models/commands.dart';
 import '../../services/haptics.dart';
+import '../../widgets/animated_reveal.dart';
 import '../../widgets/app_card.dart';
 import '../../widgets/app_modal.dart';
 import '../../widgets/app_segmented_control.dart';
@@ -183,9 +184,7 @@ class _AutoBody extends ConsumerWidget {
                       ? null
                       : Padding(
                           key: ValueKey(standDownFault!.receivedAt),
-                          padding: const EdgeInsets.only(
-                            bottom: AppSpacing.lg,
-                          ),
+                          padding: const EdgeInsets.only(bottom: AppSpacing.lg),
                           child: _StandDownBanner(
                             fault: standDownFault!,
                             onAcknowledge: onAcknowledgeFault,
