@@ -3,7 +3,7 @@
 
   # ROVEROS
 
-  **A premium, dashboard-style control console for a DIY ESP32 4WD smart robot car.**
+  **A premium, dashboard-style control console for DIY robots — an ESP32 4WD smart robot car, and an Arduino spiderbot.**
 
   Built to feel like an EV instrument cluster and an RC transmitter — not a bare-bones Arduino remote.
 
@@ -27,7 +27,7 @@
 
 - [What this is](#what-this-is)
 - [Tech stack](#tech-stack)
-- [Hardware target](#hardware-target)
+- [Hardware targets](#hardware-targets)
 - [Screens](#screens)
 - [Architecture](#architecture)
 - [Data flow](#data-flow)
@@ -41,15 +41,27 @@
 
 ## What this is
 
-ROVEROS pairs with an ESP32 rover over BLE, drives it with an analog virtual
-joystick, and surfaces live telemetry (battery, distance, servo angle, motor
-output) on a dark, high-contrast dashboard. A phone-side perception layer
-turns the raw HC-SR04 ultrasonic sensor into a filtered, confidence-scored
-estimate — closing speed, time-to-contact, gap-finding — without the vehicle
-ever ceding a single safety decision to the app. It also runs a fully
-autonomous **mock rover** with no hardware attached, so the whole app —
-including its safety behaviour — can be built, demoed, and tested without a
-soldering iron.
+ROVEROS pairs with a DIY robot over BLE and drives it from a dark,
+high-contrast dashboard. It currently speaks to two vehicles, switchable from
+**Settings → Vehicle → Vehicle type**, each with its own drive HUD and BLE
+profile but sharing one app, one wire protocol grammar, and one transport
+layer:
+
+- **The ESP32 "Optimus" 4WD car** — an analog virtual joystick driving a
+  differential-drive chassis, live telemetry (battery, distance, servo angle,
+  motor output), and a phone-side perception layer that turns the raw HC-SR04
+  ultrasonic sensor into a filtered, confidence-scored estimate — closing
+  speed, time-to-contact, gap-finding — without the vehicle ever ceding a
+  single safety decision to the app.
+- **The Arduino Nano "Spiderbot"** — a direction-pad HUD driving a 4-leg trot
+  gait over BLE via an add-on BLE-serial module (the Nano has no radio of its
+  own). See [`firmware/roveros_spiderbot/README.md`](firmware/roveros_spiderbot/README.md)
+  for wiring and known gaps — this side is newer and has not been
+  hardware-verified yet (see [Known limitations](#known-limitations)).
+
+It also runs a fully autonomous **mock vehicle** for either kind with no
+hardware attached, so the whole app — including its safety behaviour — can be
+built, demoed, and tested without a soldering iron.
 
 ## Tech stack
 
@@ -59,14 +71,16 @@ soldering iron.
 | Framework | [Flutter 3.44](https://flutter.dev) | Single codebase, Android + iOS |
 | State management | [flutter_riverpod](https://riverpod.dev) `^3.4.2` | `Notifier`s per concern (connection, drive, telemetry, settings, perception) |
 | Routing | [go_router](https://pub.dev/packages/go_router) `^17.4.0` | Declarative routes, `StatefulShellRoute` for the bottom-tab shell |
-| Transport | [flutter_blue_plus](https://pub.dev/packages/flutter_blue_plus) `^2.3.11` | BLE central role — scan, connect, notify/write against Nordic UART Service |
+| Transport | [flutter_blue_plus](https://pub.dev/packages/flutter_blue_plus) `^2.3.11` | BLE central role — scan, connect, notify/write against a per-vehicle `BleProfile` (Nordic UART Service for the car, HM-10/AT-09-style for the spider) |
 | Permissions | [permission_handler](https://pub.dev/packages/permission_handler) `^13.0.0` | Runtime Bluetooth/location permission flow |
-| Persistence | [shared_preferences](https://pub.dev/packages/shared_preferences) `^2.5.5` | Settings, remembered vehicle, activity log |
+| Persistence | [shared_preferences](https://pub.dev/packages/shared_preferences) `^2.5.5` | Settings, one remembered vehicle per kind, activity log |
 | Sharing | [share_plus](https://pub.dev/packages/share_plus) `^12.0.1` | Session-log export from the Telemetry screen |
-| Firmware target | ESP32 ("Optimus" board) | BLE peripheral, motor driver, sensor I/O, the only thing that decides to stop |
-| Testing | `flutter_test` | 100 tests — protocol, motor math, perception filters, layout metrics, a11y |
+| Firmware targets | ESP32 ("Optimus" board) · Arduino Nano ("Spiderbot") | BLE peripheral, motor/servo driver, sensor I/O, the only thing that decides to stop |
+| Testing | `flutter_test` | 100 tests — protocol, motor math, perception filters, layout metrics, a11y (car path; see [Known limitations](#known-limitations)) |
 
-## Hardware target
+## Hardware targets
+
+### Car — ESP32 "Optimus" 4WD
 
 | Component | Role |
 |---|---|
@@ -77,10 +91,27 @@ soldering iron.
 | SG90 9g servo | Sweeps the HC-SR04 for the radar view |
 | White LED headlights | Solid / flash / hazard, ESP32-timed |
 
-**The phone never makes a safety decision.** Motor stop logic, the
-communication watchdog, and autonomous obstacle-avoidance decisions all live
-on the ESP32. The app only sends high-level commands and displays what the
-vehicle reports back — see [Safety model](#safety-model) below.
+Firmware: [`firmware/roveros_op0148/`](firmware/roveros_op0148/).
+
+### Spider — Arduino Nano "Spiderbot"
+
+| Component | Role |
+|---|---|
+| Arduino Nano | Central MCU — no radio of its own |
+| HM-10/AT-09-class BLE-serial module | Bridges the Nano's UART to BLE; see [Known limitations](#known-limitations) |
+| 8× MG90 servo (hip + knee × 4 legs) | Trot gait |
+| 2× 18650 Li-ion | Power |
+
+Firmware: [`firmware/roveros_spiderbot/`](firmware/roveros_spiderbot/) — this
+kit ships generic with no fixed pinout, so wiring, exact BLE module UUIDs and
+gait tuning are starting points to verify on the bench, not confirmed values;
+see that folder's README for the specifics.
+
+**The phone never makes a safety decision, for either vehicle.** Motor/gait
+stop logic and the communication watchdog live on the vehicle's own MCU (plus
+autonomous obstacle-avoidance decisions, for the car). The app only sends
+high-level commands and displays what the vehicle reports back — see [Safety
+model](#safety-model) below.
 
 ## Screens
 
@@ -88,11 +119,12 @@ vehicle reports back — see [Safety model](#safety-model) below.
 |---|---|---|
 | Splash | Portrait | Boot sequence: load settings, check saved vehicle, animate in |
 | Home | Portrait | Vehicle status, battery, readiness, recent activity, START DRIVING |
-| Connect | Portrait | BLE scan/connect/reconnect, connection-quality detail |
-| **Drive** | **Landscape** | Joystick, speed, emergency stop, lights, distance, servo/radar preview |
-| Auto | Portrait | MANUAL / OBSTACLE AVOIDANCE / AUTO SCAN, live radar, vehicle decisions |
+| Connect | Portrait | BLE scan/connect/reconnect (against the active vehicle's `BleProfile`), connection-quality detail |
+| **Drive** (car) | **Landscape** | Joystick, speed, emergency stop, lights, distance, servo/radar preview |
+| **Drive** (spider) | **Landscape** | Direction pad, gait speed, emergency stop, animated walking indicator |
+| Auto | Portrait | MANUAL / OBSTACLE AVOIDANCE / AUTO SCAN, live radar, vehicle decisions — car only, see [Known limitations](#known-limitations) |
 | Telemetry | Portrait | Full dashboard: every reported value, link health, trend sparklines, last ACK, errors |
-| Settings | Portrait | Vehicle, controls, motors, sensors, lights, connection, app preferences |
+| Settings | Portrait | Vehicle type, controls, motors, sensors, lights, connection, app preferences — the spider hides the car-only calibration sections |
 
 ## Architecture
 
@@ -112,24 +144,41 @@ lib/
 **Transport abstraction.** `Transport` is a single interface
 (`connect/disconnect/send/subscribe/scan`) implemented by both
 `BluetoothTransport` (flutter_blue_plus) and `MockTransport` (a simulated
-ESP32 with its own watchdog, telemetry stream, and injectable faults). The UI
-and `DriveController` depend only on this interface, so mock and real
+vehicle with its own watchdog, telemetry stream, and injectable faults). The
+UI and drive controllers depend only on this interface, so mock and real
 hardware are interchangeable behind one `transportProvider`.
+
+**Vehicle kind.** [`VehicleKind`](lib/models/vehicle_kind.dart) (`car` /
+`spider`) is the one switch the rest of the app reads: it carries each
+vehicle's `BleProfile` (service/write/notify UUIDs — the car's split Nordic
+UART RX/TX pair vs. the spider's single-characteristic HM-10/AT-09 shape),
+its scan name hints, and its default vehicle name.
+`AppSettings.vehicleKind` selects it; `BluetoothTransport`'s constructor and
+`StorageService`'s per-kind-keyed remembered-vehicle storage both take it
+directly, so the car and spider can be paired independently and switching
+between them in Settings tears down and rebuilds the transport against the
+right profile.
 
 **Protocol.** Every wire token lives in
 [`command_constants.dart`](lib/core/constants/command_constants.dart); every
-frame is built or parsed exclusively by
+frame is built or parsed by
 [`car_protocol.dart`](lib/services/car_protocol.dart)
 (`buildDriveCommand`, `buildStopCommand`, `parseTelemetry`, `parseAck`,
-`parseError`, `validateCommand`, …). No widget ever touches a raw command
-string.
+`parseError`, `validateCommand`, …) — reused unchanged for both vehicles,
+since inbound frame parsing has no car-specific gating. The spider adds
+exactly one outbound verb, `CMD:WALK`, built by
+[`spider_commands.dart`](lib/services/spider_commands.dart); everything else
+it needs (`STOP`/`PING`/`CONFIG`) is the same generic builder the car uses.
+No widget ever touches a raw command string.
 
 **State.** Riverpod `Notifier`s split communication state
 (`ConnectionController`, holding the `LinkState`) from commanded/UI state
-(`DriveController`, holding the `DriveState`) from vehicle-reported truth
-(`TelemetryController`) from phone-side inference (`PerceptionController`,
-holding a `PerceptionSnapshot`). Settings persist through `StorageService`
-(SharedPreferences) and are re-validated on every load.
+(`DriveController` for the car's `DriveState`; `SpiderDriveController` for the
+spider's much simpler `SpiderDriveState` — a held direction and a speed, no
+ramping) from vehicle-reported truth (`TelemetryController`) from phone-side
+inference (`PerceptionController`, holding a `PerceptionSnapshot`, car only).
+Settings persist through `StorageService` (SharedPreferences) and are
+re-validated on every load.
 
 **Perception.** `core/perception/` is an ordinary Dart pipeline (no Flutter,
 no Riverpod) that turns one HC-SR04 reading per servo bearing into a filtered
@@ -137,22 +186,28 @@ estimate: a Kalman-style `DistanceFilter` per bucketed angle, a `ProximityGate`
 that adds hysteresis so a boundary reading can't strobe the UI between
 states, and a `RadarField` that segments the swept readings into surfaces and
 gaps. It is advisory end to end — nothing downstream may build a command from
-it, and the ESP32 never sees its output.
+it, and the vehicle never sees its output. Car only — the spider has no
+ultrasonic sensor.
 
 ### Component diagram
+
+Traces the car's path in full detail, since it's the richer of the two. The
+spider rides the same `Transport`/`Protocol`/`Storage` backbone through its
+own `BleProfile` and `SpiderDriveController` — just without the perception
+stage or the car-only wire verbs — see [Vehicle kind](#architecture) above.
 
 ```mermaid
 flowchart TB
     subgraph Phone["ROVEROS — Flutter App"]
         direction TB
         UI["Features / Screens\nHome · Connect · Drive · Auto · Telemetry · Settings"]
-        Ctrl["Riverpod Controllers\nConnectionController · DriveController\nTelemetryController · PerceptionController · SettingsController"]
-        Perception["Perception Pipeline\nDistanceFilter · ProximityGate · RadarField"]
-        Protocol["CarProtocol\nbuild*() / parse*()"]
+        Ctrl["Riverpod Controllers\nConnectionController · DriveController / SpiderDriveController\nTelemetryController · PerceptionController · SettingsController"]
+        Perception["Perception Pipeline\nDistanceFilter · ProximityGate · RadarField\n(car only)"]
+        Protocol["CarProtocol + SpiderCommands\nbuild*() / parse*()"]
         Transport["Transport interface"]
-        BLEImpl["BluetoothTransport\n(flutter_blue_plus)"]
-        MockImpl["MockTransport\n(simulated ESP32)"]
-        Storage["StorageService\n(SharedPreferences)"]
+        BLEImpl["BluetoothTransport\n(flutter_blue_plus, per-vehicle BleProfile)"]
+        MockImpl["MockTransport\n(simulated vehicle)"]
+        Storage["StorageService\n(SharedPreferences, per-kind)"]
 
         UI --> Ctrl
         Ctrl --> Perception
@@ -182,7 +237,9 @@ flowchart TB
 
 Two independent loops run at all times once connected — an outbound command
 loop and an inbound telemetry loop — plus a phone-side inference stage that
-sits only on the inbound side.
+sits only on the inbound side. Shown for the car; the spider's loop is the
+same shape with `SpiderDriveController`/`CMD:WALK` in place of
+`DriveController`/`CMD:DRIVE`, and no perception stage.
 
 ```mermaid
 flowchart LR
@@ -209,6 +266,13 @@ flowchart LR
 ```
 
 ## Sequence diagrams
+
+Drawn for the car — the deeper of the two flows. The spider's pairing
+sequence is identical (same `ConnectionController`, same `RememberedVehicle`
+save, just the spider's `BleProfile`); its driving loop swaps
+`VirtualJoystick`/`DriveController`/`CMD:DRIVE` for
+`DirectionPad`/`SpiderDriveController`/`CMD:WALK` and has no perception step;
+link loss and recovery are exactly the same code path for both.
 
 ### Pairing and connecting
 
@@ -293,55 +357,69 @@ sequenceDiagram
 
 ## Safety model
 
-1. **The ESP32 owns the stop.** It runs its own communication watchdog — if
-   no valid drive command arrives within a configurable window (sent via
-   `CMD:CONFIG;TIMEOUT:ms`, default 750ms), it cuts the motors itself. The app
-   never has to succeed at sending a message for the vehicle to stop safely.
-2. **Release-to-stop bypasses everything.** Letting go of the joystick sends
-   `CMD:STOP` immediately, ungated by throttling or acceleration ramping.
+These apply to both vehicles unless noted — each MCU (ESP32 or Nano) runs its
+own independent copy of the watchdog logic; nothing here is shared code
+between them, just the same design repeated on each firmware.
+
+1. **The vehicle owns the stop.** Both firmwares run their own communication
+   watchdog — if no valid drive command arrives within a configurable window
+   (sent via `CMD:CONFIG;TIMEOUT:ms`, default 750ms), it cuts the motors (or
+   returns the legs to neutral) itself. The app never has to succeed at
+   sending a message for the vehicle to stop safely.
+2. **Release-to-stop bypasses everything.** Letting go of the joystick (car)
+   or a direction button (spider) sends `CMD:STOP` immediately, ungated by
+   throttling or acceleration ramping.
 3. **Leaving Drive, backgrounding the app, or losing the link** all trigger an
    immediate stop attempt and clear the commanded output client-side.
 4. **Emergency stop latches.** It requires a deliberate second tap to release
    — a twitching thumb can't immediately re-arm the motors.
-5. **Autonomous decisions happen on the vehicle.** The phone only sends
-   `CMD:MODE`/`CMD:SCAN` and displays `telemetry.decision`; a reported sensor
-   or motor fault automatically drops the app out of autonomous mode.
+5. **Autonomous decisions happen on the vehicle — car only.** The phone only
+   sends `CMD:MODE`/`CMD:SCAN` and displays `telemetry.decision`; a reported
+   sensor or motor fault automatically drops the app out of autonomous mode.
+   The spider has no autonomous mode yet.
 6. **Drive commands are throttled and epsilon-filtered** (≤15/s, changes below
    a small threshold are skipped) so the radio is never flooded — but a
    transition to or from a full stop is never suppressed.
-7. **Perception is advisory only.** The phone-side filter can flag an obstacle
-   as unreliable or estimate time-to-contact, but it never builds a command —
-   it only tells the driver what it believes, and says plainly when it
-   doesn't believe itself.
+7. **Perception is advisory only — car only.** The phone-side filter can flag
+   an obstacle as unreliable or estimate time-to-contact, but it never builds
+   a command — it only tells the driver what it believes, and says plainly
+   when it doesn't believe itself. The spider has no sensor to build this
+   from.
 
 ## How it works, step by step
 
 1. **Boot.** `SplashScreen` loads persisted settings, checks for a remembered
-   vehicle, and routes to onboarding (first run) or the shell (returning
-   user).
-2. **Pair.** `Connect` scans for BLE devices advertising the Nordic UART
-   Service, surfaces the saved vehicle first, and connects on tap. On
-   success, the watchdog timeout is pushed to the ESP32 and the vehicle is
-   remembered for next time.
-3. **Drive.** Opening Drive forces landscape, arms the HUD, and starts
-   streaming joystick input as throttled `CMD:DRIVE` frames. Releasing the
-   stick, leaving the screen, or backgrounding the app all force `CMD:STOP`.
-4. **Watch.** Every inbound `DATA` frame updates `TelemetryController`, feeds
-   the perception pipeline for a filtered distance/confidence/closing-speed
-   read, and republishes through Home, Drive and the Telemetry dashboard —
-   all from the same single source of truth.
-5. **Go autonomous.** Selecting an `AutoBehaviour` sends `CMD:MODE`/`CMD:SCAN`
-   and nothing else; the ESP32 makes every avoidance decision and reports it
-   back via `telemetry.decision`. A fail-safe error drops the app back to
-   manual automatically.
-6. **Recover.** A dropped link is detected from the transport's own status
+   vehicle of the active kind, and routes to onboarding (first run) or the
+   shell (returning user).
+2. **Pick a vehicle.** Settings → Vehicle → Vehicle type selects `car` or
+   `spider`, which decides the `BleProfile` scanned/connected below and which
+   Drive HUD opens. Switching it tears down and rebuilds the connection
+   against the new vehicle.
+3. **Pair.** `Connect` scans for BLE devices matching the active vehicle's
+   profile, surfaces that kind's saved vehicle first, and connects on tap. On
+   success, the watchdog timeout is pushed to the vehicle and it's remembered
+   for next time (independently per kind).
+4. **Drive.** Opening Drive forces landscape and arms the HUD — the car
+   streams joystick input as throttled `CMD:DRIVE` frames, the spider streams
+   held direction-pad input as `CMD:WALK` frames. Releasing input, leaving
+   the screen, or backgrounding the app all force `CMD:STOP` either way.
+5. **Watch.** Every inbound `DATA` frame updates `TelemetryController` and
+   republishes through Home, Drive and the Telemetry dashboard from one
+   source of truth; for the car it also feeds the perception pipeline for a
+   filtered distance/confidence/closing-speed read.
+6. **Go autonomous — car only.** Selecting an `AutoBehaviour` sends
+   `CMD:MODE`/`CMD:SCAN` and nothing else; the ESP32 makes every avoidance
+   decision and reports it back via `telemetry.decision`. A fail-safe error
+   drops the app back to manual automatically.
+7. **Recover.** A dropped link is detected from the transport's own status
    stream, triggers an immediate UI banner, and — if enabled — an exponential
-   backoff reconnect using the last remembered device, all while the ESP32's
-   own watchdog has already stopped the motors independently.
-7. **Configure.** Settings changes (speed cap, dead zone, obstacle
-   thresholds, motor trim) persist immediately via `StorageService` and are
-   re-validated on every load so a corrupted or out-of-range stored value can
-   never reach the vehicle.
+   backoff reconnect using the last remembered device, all while the
+   vehicle's own watchdog has already stopped independently.
+8. **Configure.** Settings changes persist immediately via `StorageService`
+   and are re-validated on every load so a corrupted or out-of-range stored
+   value can never reach the vehicle — the car's motor/sensor/light sections
+   are hidden entirely while the spider is active, since it has none of that
+   hardware.
 
 ## Getting started
 
@@ -350,16 +428,22 @@ flutter pub get
 flutter run                # Mock mode is on by default — no hardware needed
 ```
 
-Mock mode is enabled out of the box (Settings → App → **Mock car mode**), so
-`flutter run` gets you a fully interactive simulated rover immediately:
+Mock mode is enabled out of the box (Settings → App → **Mock mode**), so
+`flutter run` gets you a fully interactive simulated vehicle immediately:
 connect, drive, watch the battery drain under load, trigger obstacle
-avoidance, and inject faults, all without an ESP32 in the room.
+avoidance, and inject faults, all without any hardware in the room. Switch
+**Settings → Vehicle → Vehicle type** to try the spider's direction-pad HUD
+instead of the car's joystick — mock mode for the spider is deliberately
+thinner (it ACKs commands and reports battery/state, but doesn't simulate a
+gait; see [Known limitations](#known-limitations)).
 
-To drive real hardware, turn **Mock car mode** off in Settings. The app then
-scans for BLE devices exposing the Nordic UART Service (the de-facto BLE
-serial profile most ESP32 Arduino sketches use) — see
-[`lib/core/constants/app_config.dart`](lib/core/constants/app_config.dart) for
-the service/characteristic UUIDs your firmware needs to expose.
+To drive real hardware, turn **Mock mode** off in Settings. The app then
+scans for BLE devices matching the active vehicle's `BleProfile` — the Nordic
+UART Service for the car (the de-facto BLE serial profile most ESP32 Arduino
+sketches use), or the HM-10/AT-09-style profile for the spider. See
+[`lib/models/vehicle_kind.dart`](lib/models/vehicle_kind.dart) for the
+service/characteristic UUIDs your firmware needs to expose, and each
+`firmware/*/README.md` for the matching sketch.
 
 ### Requirements
 
@@ -390,7 +474,10 @@ dead-zone and speed-limit clamping, accel/decel ramping, command
 serialisation/validation, telemetry parsing (including malformed and
 out-of-range frames), emergency stop, disconnect handling, and the firmware
 watchdog — exercised end-to-end against `MockTransport`, not just asserted in
-isolation.
+isolation. **All 100 of these predate the spider and exercise the car path
+only** — the spider's `SpiderCommands`, `SpiderDriveController` and
+`GaitEngine` have no dedicated tests yet (see [Known
+limitations](#known-limitations)).
 
 ## Known limitations
 
@@ -398,6 +485,24 @@ isolation.
   environment; `BluetoothTransport` compiles and follows the Nordic UART
   Service convention, but pairing with real ESP32 firmware has not been
   hardware-verified here.
+- **The spiderbot side is newer and unverified against real hardware** — the
+  kit this targets hadn't been assembled while this was written:
+  - The spider's default BLE UUIDs
+    ([`vehicle_kind.dart`](lib/models/vehicle_kind.dart)) are the common
+    HM-10/AT-09 defaults, not a confirmed value for any specific module.
+  - `firmware/roveros_spiderbot/gait.h`'s leg angles, pin assignments and
+    step timing are starting points that need bench tuning once legs are
+    wired — see that file's `GaitTuning` block and the firmware README's
+    "Known gaps".
+  - `CMD:WALK`'s speed field round-trips through the app but the firmware
+    doesn't act on it yet — every gait step runs at one fixed cadence.
+  - Spider mock mode ACKs commands and reports battery/state but does not
+    simulate an actual gait, and the demo/fault-injection panel (Settings →
+    App → Simulator controls) is still car-only — it references the car's
+    HC-SR04/battery/obstacle model regardless of which vehicle kind is
+    active.
+  - No Dart test coverage yet for `SpiderCommands`, `SpiderDriveController`
+    or `GaitEngine` (see [Testing](#testing)).
 - No CI pipeline is configured — `flutter analyze` / `flutter test` /
   `flutter build apk` are run manually (see [Testing](#testing)).
 - Release signing for Android/iOS is left to the maintainer.

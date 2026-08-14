@@ -655,9 +655,9 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
       icon: SettingsCategory.app.icon,
       children: [
         SettingsSwitchRow(
-          label: 'Mock car mode',
+          label: 'Mock mode',
           description:
-              'Drive a simulated rover. No Bluetooth commands are sent.',
+              'Drive a simulated vehicle. No Bluetooth commands are sent.',
           icon: Icons.science_rounded,
           value: settings.mockMode,
           onChanged: _setMockMode,
@@ -667,7 +667,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
             label: 'Simulator controls',
             description:
                 'Set the battery, place an obstacle, inject faults into the '
-                'mock rover',
+                'mock vehicle',
             icon: Icons.tune_rounded,
             onTap: () => DemoModeSheet.show(context),
           ),
