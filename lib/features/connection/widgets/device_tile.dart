@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/utils/formatters.dart';
 import '../../../models/vehicle.dart';
+import '../../../models/vehicle_kind.dart';
 import '../../../widgets/app_button.dart';
 import '../../../widgets/app_card.dart';
 import '../../../widgets/connection_badge.dart';
@@ -12,6 +13,7 @@ class DeviceTile extends StatelessWidget {
   const DeviceTile({
     super.key,
     required this.vehicle,
+    required this.kind,
     required this.onConnect,
     this.isConnecting = false,
     this.isConnected = false,
@@ -19,6 +21,11 @@ class DeviceTile extends StatelessWidget {
   });
 
   final DiscoveredVehicle vehicle;
+
+  /// The vehicle kind currently being scanned for — decides the icon and
+  /// which devices are flagged as "likely this vehicle".
+  final VehicleKind kind;
+
   final VoidCallback onConnect;
   final bool isConnecting;
   final bool isConnected;
@@ -34,11 +41,12 @@ class DeviceTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final canConnect = vehicle.isConnectable && !isConnecting && !isConnected;
+    final looksLikeVehicle = vehicle.looksLike(kind.nameHints);
 
     return Padding(
       padding: const EdgeInsets.only(bottom: AppSpacing.md),
       child: AppCard(
-        accent: vehicle.looksLikeRover ? AppColors.accent : null,
+        accent: looksLikeVehicle ? AppColors.accent : null,
         semanticLabel:
             '${vehicle.displayName}. $_statusLabel. '
             'Signal ${vehicle.signal.label}. '
@@ -54,11 +62,13 @@ class DeviceTile extends StatelessWidget {
                 border: Border.all(color: AppColors.border),
               ),
               child: Icon(
-                vehicle.looksLikeRover
-                    ? Icons.directions_car_rounded
+                looksLikeVehicle
+                    ? (kind == VehicleKind.spider
+                          ? Icons.bug_report_rounded
+                          : Icons.directions_car_rounded)
                     : Icons.bluetooth_rounded,
                 size: 20,
-                color: vehicle.looksLikeRover
+                color: looksLikeVehicle
                     ? AppColors.accent
                     : AppColors.textTertiary,
               ),

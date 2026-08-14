@@ -5,11 +5,13 @@ import 'package:go_router/go_router.dart';
 import '../../features/auto/auto_screen.dart';
 import '../../features/connection/connection_screen.dart';
 import '../../features/drive/drive_screen.dart';
+import '../../features/drive/spider_drive_screen.dart';
 import '../../features/home/home_screen.dart';
 import '../../features/onboarding/onboarding_screen.dart';
 import '../../features/settings/settings_screen.dart';
 import '../../features/splash/splash_screen.dart';
 import '../../features/telemetry/telemetry_screen.dart';
+import '../../models/vehicle_kind.dart';
 import '../../widgets/rover_shell.dart';
 
 /// Route paths. Screens never write a literal path string.
@@ -25,7 +27,13 @@ abstract final class AppRoute {
 
   /// Presented over the shell — the drive HUD owns the whole screen.
   static const String drive = '/drive';
+  static const String spiderDrive = '/drive-spider';
   static const String connect = '/connect';
+
+  /// The drive route for [kind] — every "go drive" call site should route
+  /// through this rather than hardcoding [drive].
+  static String driveFor(VehicleKind kind) =>
+      kind == VehicleKind.spider ? spiderDrive : drive;
 }
 
 final rootNavigatorKey = GlobalKey<NavigatorState>(debugLabel: 'root');
@@ -76,6 +84,11 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         path: AppRoute.drive,
         pageBuilder: (context, state) =>
             _verticalPage(const DriveScreen(), state),
+      ),
+      GoRoute(
+        path: AppRoute.spiderDrive,
+        pageBuilder: (context, state) =>
+            _verticalPage(const SpiderDriveScreen(), state),
       ),
       GoRoute(
         path: AppRoute.onboarding,

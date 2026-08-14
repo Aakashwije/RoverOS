@@ -223,6 +223,7 @@ class _ConnectionScreenState extends ConsumerState<ConnectionScreen>
                   for (final device in remembered)
                     DeviceTile(
                       vehicle: device,
+                      kind: settings.vehicleKind,
                       isRemembered: true,
                       isConnecting:
                           link.status == ConnectionStatus.connecting &&
@@ -257,6 +258,7 @@ class _ConnectionScreenState extends ConsumerState<ConnectionScreen>
                   for (final device in others)
                     DeviceTile(
                       vehicle: device,
+                      kind: settings.vehicleKind,
                       isRemembered: false,
                       isConnecting:
                           link.status == ConnectionStatus.connecting &&

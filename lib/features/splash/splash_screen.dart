@@ -58,12 +58,12 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
     final startedAt = DateTime.now();
 
     // 1. Settings. Reading the provider forces the synchronous load from disk.
-    ref.read(settingsProvider);
+    final settings = ref.read(settingsProvider);
     await _advance(BootStep.vehicle);
 
-    // 2. Saved vehicle.
+    // 2. Saved vehicle, for whichever vehicle kind is currently active.
     final storage = ref.read(storageServiceProvider);
-    final remembered = storage.loadVehicle();
+    final remembered = storage.loadVehicle(settings.vehicleKind);
     final isOnboarded = storage.loadOnboardingComplete();
     await _advance(BootStep.permissions);
 

@@ -1,5 +1,5 @@
-import '../core/constants/app_config.dart';
 import 'connection_state.dart';
+import 'vehicle_kind.dart';
 
 /// A vehicle discovered during a scan, or remembered from a previous session.
 ///
@@ -28,11 +28,12 @@ class DiscoveredVehicle {
 
   String get displayName => hasName ? name : 'Unnamed device';
 
-  /// True when the advertised name looks like a rover controller. Used to sort
-  /// likely vehicles above unrelated peripherals in the scan list.
-  bool get looksLikeRover {
+  /// True when the advertised name matches one of [hints] (the active
+  /// [VehicleKind]'s name hints). Used to sort likely vehicles above
+  /// unrelated peripherals in the scan list.
+  bool looksLike(List<String> hints) {
     final upper = name.toUpperCase();
-    return AppConfig.knownDeviceNameHints.any(upper.contains);
+    return hints.any(upper.contains);
   }
 
   DiscoveredVehicle copyWith({
@@ -65,19 +66,24 @@ class RememberedVehicle {
   const RememberedVehicle({
     required this.id,
     required this.name,
+    required this.kind,
     required this.lastConnected,
   });
 
   final String id;
   final String name;
+  final VehicleKind kind;
   final DateTime lastConnected;
 
   Map<String, dynamic> toJson() => {
     'id': id,
     'name': name,
+    'kind': kind.name,
     'lastConnected': lastConnected.toIso8601String(),
   };
 
+  /// `kind` defaults to [VehicleKind.car] when absent — every record written
+  /// before the spiderbot existed is a car record.
   static RememberedVehicle? fromJson(Map<String, dynamic> json) {
     final id = json['id'];
     final name = json['name'];
@@ -85,6 +91,7 @@ class RememberedVehicle {
     return RememberedVehicle(
       id: id,
       name: name,
+      kind: VehicleKind.fromName(json['kind'] as String?),
       lastConnected:
           DateTime.tryParse(json['lastConnected'] as String? ?? '') ??
           DateTime.now(),

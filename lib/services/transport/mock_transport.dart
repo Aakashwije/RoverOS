@@ -6,6 +6,7 @@ import '../../core/constants/command_constants.dart';
 import '../../core/utils/clamp.dart';
 import '../../models/commands.dart';
 import '../../models/vehicle.dart';
+import '../../models/vehicle_kind.dart';
 import 'transport.dart';
 
 /// Faults a developer or demo can inject into the simulated rover.
@@ -39,9 +40,17 @@ enum MockFault {
 /// that matter for correctness rather than physics: the command watchdog,
 /// telemetry cadence, ACKs, battery drain under load and error frames.
 class MockTransport implements Transport {
-  MockTransport({math.Random? random}) : _random = random ?? math.Random();
+  MockTransport({math.Random? random, this.kind = VehicleKind.car})
+    : _random = random ?? math.Random();
 
   final math.Random _random;
+
+  /// Only changes the scan catalogue and default device id below — the
+  /// telemetry/command simulation stays car-shaped either way. A spider
+  /// screen only ever reads the generic fields (battery, state) out of it, so
+  /// the unused car-only fields (motors, servo, lights) are harmless noise
+  /// rather than something worth a parallel simulation for mock mode.
+  final VehicleKind kind;
 
   final _statusController = StreamController<TransportStatus>.broadcast();
   final _inboundController = StreamController<String>.broadcast();
@@ -160,11 +169,17 @@ class MockTransport implements Transport {
     final found = <DiscoveredVehicle>[];
     // A realistic scan trickles devices in rather than returning a full list,
     // so the UI's progressive-discovery path is what gets exercised.
-    const catalogue = [
-      ('MOCK-ESP32-CAR', 'mock-rover-01', -48),
-      ('BT-Speaker', 'mock-other-01', -76),
-      ('ESP32-CAR-B', 'mock-rover-02', -81),
-    ];
+    final catalogue = kind == VehicleKind.spider
+        ? const [
+            ('MOCK-NANO-SPIDER', 'mock-spider-01', -48),
+            ('BT-Speaker', 'mock-other-01', -76),
+            ('HM-10-B', 'mock-spider-02', -81),
+          ]
+        : const [
+            ('MOCK-ESP32-CAR', 'mock-rover-01', -48),
+            ('BT-Speaker', 'mock-other-01', -76),
+            ('ESP32-CAR-B', 'mock-rover-02', -81),
+          ];
 
     var index = 0;
     _scanTimer?.cancel();
@@ -229,7 +244,9 @@ class MockTransport implements Transport {
       throw const TransportException(TransportFailure.connectionFailed);
     }
 
-    _deviceId = deviceId ?? 'mock-rover-01';
+    _deviceId =
+        deviceId ??
+        (kind == VehicleKind.spider ? 'mock-spider-01' : 'mock-rover-01');
     _vehicleState = VehicleState.idle;
     _setStatus(TransportStatus.connected);
     _startTelemetry();
@@ -404,6 +421,13 @@ class MockTransport implements Transport {
 
       case Wire.verbPing:
         _ack(Wire.verbPing);
+
+      // Spiderbot gait command — mock mode ACKs it and marks the vehicle
+      // driving/stopped, without simulating the actual gait.
+      case Wire.verbWalk:
+        _vehicleState = VehicleState.driving;
+        _lastDriveAt = DateTime.now();
+        _ack(Wire.verbWalk);
     }
   }
 

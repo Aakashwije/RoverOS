@@ -4,6 +4,7 @@ import '../../../core/theme/app_theme.dart';
 import '../../../models/commands.dart';
 import '../../../models/connection_state.dart';
 import '../../../models/telemetry.dart';
+import '../../../models/vehicle_kind.dart';
 import '../../../widgets/app_button.dart';
 import '../../../widgets/app_card.dart';
 import '../../../widgets/battery_indicator.dart';
@@ -20,18 +21,20 @@ class VehicleStatusCard extends StatelessWidget {
     required this.link,
     required this.telemetry,
     required this.driveMode,
+    required this.kind,
     required this.onConnect,
   });
 
   final LinkState link;
   final Telemetry telemetry;
   final DriveMode driveMode;
+  final VehicleKind kind;
   final VoidCallback onConnect;
 
   @override
   Widget build(BuildContext context) {
     if (!link.isConnected) {
-      return _DisconnectedCard(link: link, onConnect: onConnect);
+      return _DisconnectedCard(link: link, kind: kind, onConnect: onConnect);
     }
 
     return AppCard(
@@ -80,25 +83,31 @@ class VehicleStatusCard extends StatelessWidget {
                   level: link.signal.level,
                 ),
               ),
-              const SizedBox(width: AppSpacing.md),
-              Expanded(
-                child: _Vital(
-                  label: 'MODE',
-                  value: driveMode.label,
-                  icon: driveMode.isAutonomous
-                      ? Icons.auto_mode_rounded
-                      : Icons.sports_esports_rounded,
-                  level: driveMode.isAutonomous
-                      ? StatusLevel.info
-                      : StatusLevel.neutral,
+              // Drive mode (MANUAL/AVOID/SCAN) only exists for the car's
+              // autonomy behaviours.
+              if (kind == VehicleKind.car) ...[
+                const SizedBox(width: AppSpacing.md),
+                Expanded(
+                  child: _Vital(
+                    label: 'MODE',
+                    value: driveMode.label,
+                    icon: driveMode.isAutonomous
+                        ? Icons.auto_mode_rounded
+                        : Icons.sports_esports_rounded,
+                    level: driveMode.isAutonomous
+                        ? StatusLevel.info
+                        : StatusLevel.neutral,
+                  ),
                 ),
-              ),
+              ],
               const SizedBox(width: AppSpacing.md),
               Expanded(
                 child: _Vital(
                   label: 'STATE',
                   value: (telemetry.vehicleState ?? VehicleState.idle).label,
-                  icon: Icons.directions_car_rounded,
+                  icon: kind == VehicleKind.spider
+                      ? Icons.bug_report_rounded
+                      : Icons.directions_car_rounded,
                   level: telemetry.vehicleState == VehicleState.fault
                       ? StatusLevel.danger
                       : StatusLevel.good,
@@ -165,9 +174,14 @@ class _Vital extends StatelessWidget {
 }
 
 class _DisconnectedCard extends StatelessWidget {
-  const _DisconnectedCard({required this.link, required this.onConnect});
+  const _DisconnectedCard({
+    required this.link,
+    required this.kind,
+    required this.onConnect,
+  });
 
   final LinkState link;
+  final VehicleKind kind;
   final VoidCallback onConnect;
 
   @override
@@ -193,7 +207,7 @@ class _DisconnectedCard extends StatelessWidget {
           Text(
             remembered
                 ? 'Last paired with ${link.displayName}. Reconnect to start driving.'
-                : 'Pair with your ESP32 rover to unlock driving, telemetry and autonomous mode.',
+                : 'Pair with your ${kind.label.toLowerCase()} to unlock driving and telemetry.',
             style: AppTypography.body,
             textAlign: TextAlign.center,
           ),

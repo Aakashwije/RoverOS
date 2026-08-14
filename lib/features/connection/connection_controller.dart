@@ -9,6 +9,7 @@ import '../../core/providers/app_providers.dart';
 import '../../models/commands.dart';
 import '../../models/connection_state.dart';
 import '../../models/vehicle.dart';
+import '../../models/vehicle_kind.dart';
 import '../../services/car_protocol.dart';
 import '../../services/transport/bluetooth_transport.dart';
 import '../../services/transport/mock_transport.dart';
@@ -16,13 +17,18 @@ import '../../services/transport/transport.dart';
 import '../settings/settings_controller.dart';
 import '../telemetry/telemetry_controller.dart';
 
-/// The active transport, chosen by the mock-mode setting.
+/// The active transport, chosen by the mock-mode setting and the active
+/// [VehicleKind].
 ///
-/// Flipping mock mode disposes the old transport and rebuilds this provider, so
-/// nothing can keep sending on a stale link.
+/// Flipping mock mode — or switching vehicle kind — disposes the old
+/// transport and rebuilds this provider, so nothing can keep sending on a
+/// stale link or against the wrong BLE profile.
 final transportProvider = Provider<Transport>((ref) {
   final useMock = ref.watch(settingsProvider.select((s) => s.mockMode));
-  final Transport transport = useMock ? MockTransport() : BluetoothTransport();
+  final kind = ref.watch(settingsProvider.select((s) => s.vehicleKind));
+  final Transport transport = useMock
+      ? MockTransport(kind: kind)
+      : BluetoothTransport(profile: kind.bleProfile);
 
   ref.onDispose(transport.dispose);
   return transport;
@@ -37,12 +43,13 @@ class ScanResults extends Notifier<List<DiscoveredVehicle>> {
   List<DiscoveredVehicle> build() => const [];
 
   void replace(List<DiscoveredVehicle> devices) {
-    // Likely rovers first, then by signal strength.
+    final hints = ref.read(settingsProvider).vehicleKind.nameHints;
+    // Likely vehicles of the active kind first, then by signal strength.
     final sorted = [...devices]
       ..sort((a, b) {
-        if (a.looksLikeRover != b.looksLikeRover) {
-          return a.looksLikeRover ? -1 : 1;
-        }
+        final aLikely = a.looksLike(hints);
+        final bLikely = b.looksLike(hints);
+        if (aLikely != bLikely) return aLikely ? -1 : 1;
         return (b.rssi ?? -999).compareTo(a.rssi ?? -999);
       });
     state = List.unmodifiable(sorted);
@@ -95,8 +102,12 @@ class ConnectionController extends Notifier<LinkState> {
 
   @override
   LinkState build() {
-    final remembered = ref.read(storageServiceProvider).loadVehicle();
     final isMock = ref.watch(settingsProvider.select((s) => s.mockMode));
+    // Watched (not read): switching vehicle kind must rebuild this controller
+    // against the newly-active transport and its own remembered device,
+    // exactly as switching mock mode already does.
+    final kind = ref.watch(settingsProvider.select((s) => s.vehicleKind));
+    final remembered = ref.read(storageServiceProvider).loadVehicle(kind);
 
     _attachTransport();
     ref.onDispose(_teardown);
@@ -226,9 +237,11 @@ class ConnectionController extends Notifier<LinkState> {
   Future<void> connectTo(DiscoveredVehicle vehicle) =>
       _connect(deviceId: vehicle.id, deviceName: vehicle.name);
 
-  /// Reconnects to the saved vehicle. No-op when nothing is remembered.
+  /// Reconnects to the saved vehicle of the active kind. No-op when nothing
+  /// is remembered.
   Future<void> reconnectSaved() async {
-    final remembered = ref.read(storageServiceProvider).loadVehicle();
+    final kind = ref.read(settingsProvider).vehicleKind;
+    final remembered = ref.read(storageServiceProvider).loadVehicle(kind);
     if (remembered == null) return;
     await _connect(deviceId: remembered.id, deviceName: remembered.name);
   }
@@ -256,6 +269,7 @@ class ConnectionController extends Notifier<LinkState> {
             RememberedVehicle(
               id: deviceId,
               name: deviceName,
+              kind: ref.read(settingsProvider).vehicleKind,
               lastConnected: DateTime.now(),
             ),
           );
@@ -427,7 +441,9 @@ class ConnectionController extends Notifier<LinkState> {
 
   Future<void> forgetDevice() async {
     if (state.isConnected) await disconnect();
-    await ref.read(storageServiceProvider).forgetVehicle();
+    await ref
+        .read(storageServiceProvider)
+        .forgetVehicle(ref.read(settingsProvider).vehicleKind);
     state = LinkState(isMock: state.isMock);
     ref
         .read(activityLogProvider.notifier)

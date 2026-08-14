@@ -4,11 +4,14 @@ import '../../../core/theme/app_theme.dart';
 import '../../../models/commands.dart';
 import '../../../models/settings.dart';
 import '../../../models/telemetry.dart';
+import '../../../models/vehicle_kind.dart';
 
-/// The three numbers worth reading before you drive: charge, clearance, mode.
+/// The numbers worth reading before you drive: charge, and — for the car
+/// only — clearance and mode. The spiderbot has neither an ultrasonic sensor
+/// nor autonomy modes, so it shows battery alone rather than two dashes.
 ///
 /// Sits above the detailed vehicle card so the common question — "is it worth
-/// picking the rover up?" — is answered without scrolling. Values dim when
+/// picking the vehicle up?" — is answered without scrolling. Values dim when
 /// telemetry is stale, matching the telemetry cards, so a still dashboard is
 /// never mistaken for a live one.
 class VitalsStrip extends StatelessWidget {
@@ -18,17 +21,32 @@ class VitalsStrip extends StatelessWidget {
     required this.settings,
     required this.driveMode,
     required this.isConnected,
+    required this.kind,
   });
 
   final Telemetry telemetry;
   final AppSettings settings;
   final DriveMode driveMode;
   final bool isConnected;
+  final VehicleKind kind;
 
   @override
   Widget build(BuildContext context) {
     final isStale = isConnected && telemetry.isStale();
     final battery = telemetry.batteryStatus;
+
+    final batteryTile = _Vital(
+      label: 'BATTERY',
+      value: telemetry.batteryPercent?.toString() ?? '—',
+      unit: '%',
+      caption: isConnected ? battery.label : 'No link',
+      icon: Icons.battery_5_bar_rounded,
+      level: isConnected ? battery.level : StatusLevel.neutral,
+      isStale: isStale,
+    );
+
+    if (kind == VehicleKind.spider) return batteryTile;
+
     final distance = telemetry.distanceStatus(
       cautionCm: settings.cautionDistanceCm,
       dangerCm: settings.dangerDistanceCm,
@@ -37,17 +55,7 @@ class VitalsStrip extends StatelessWidget {
     return Row(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Expanded(
-          child: _Vital(
-            label: 'BATTERY',
-            value: telemetry.batteryPercent?.toString() ?? '—',
-            unit: '%',
-            caption: isConnected ? battery.label : 'No link',
-            icon: Icons.battery_5_bar_rounded,
-            level: isConnected ? battery.level : StatusLevel.neutral,
-            isStale: isStale,
-          ),
-        ),
+        Expanded(child: batteryTile),
         const SizedBox(width: AppSpacing.md),
         Expanded(
           child: _Vital(

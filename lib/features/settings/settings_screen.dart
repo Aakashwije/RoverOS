@@ -11,6 +11,7 @@ import '../../core/utils/validation.dart';
 import '../../models/commands.dart';
 import '../../models/connection_state.dart';
 import '../../models/settings.dart';
+import '../../models/vehicle_kind.dart';
 import '../../services/haptics.dart';
 import '../../widgets/app_badge.dart';
 import '../../widgets/app_button.dart';
@@ -131,11 +132,23 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     if (mounted) setState(() => _isJumping = false);
   }
 
+  /// Motors/Sensors/Lights are OP0148 car calibration — the spiderbot has
+  /// none of that hardware, so both the section list and the category chips
+  /// hide them rather than showing panels with nothing to calibrate.
+  static const _spiderCategories = [
+    SettingsCategory.vehicle,
+    SettingsCategory.controls,
+    SettingsCategory.connection,
+    SettingsCategory.app,
+  ];
+
   @override
   Widget build(BuildContext context) {
     final settings = ref.watch(settingsProvider);
     final link = ref.watch(connectionProvider);
     final controller = ref.read(settingsProvider.notifier);
+    final isCar = settings.vehicleKind == VehicleKind.car;
+    final categories = isCar ? SettingsCategory.values : _spiderCategories;
 
     return Scaffold(
       backgroundColor: AppColors.background,
@@ -155,6 +168,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                 delegate: CategoryBarDelegate(
                   active: _active,
                   onSelected: _jumpTo,
+                  categories: categories,
                 ),
               ),
               SliverPadding(
@@ -174,18 +188,20 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                       SettingsCategory.controls,
                       _controlsSection(settings, controller),
                     ),
-                    _section(
-                      SettingsCategory.motors,
-                      _motorsSection(settings, link.isConnected),
-                    ),
-                    _section(
-                      SettingsCategory.sensors,
-                      _sensorsSection(settings, controller),
-                    ),
-                    _section(
-                      SettingsCategory.lights,
-                      _lightsSection(settings, controller),
-                    ),
+                    if (isCar) ...[
+                      _section(
+                        SettingsCategory.motors,
+                        _motorsSection(settings, link.isConnected),
+                      ),
+                      _section(
+                        SettingsCategory.sensors,
+                        _sensorsSection(settings, controller),
+                      ),
+                      _section(
+                        SettingsCategory.lights,
+                        _lightsSection(settings, controller),
+                      ),
+                    ],
                     _section(
                       SettingsCategory.connection,
                       _connectionSection(settings, controller, link),
@@ -214,6 +230,33 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
       title: SettingsCategory.vehicle.label,
       icon: SettingsCategory.vehicle.icon,
       children: [
+        SettingsRow(
+          label: 'Vehicle type',
+          description: settings.vehicleKind == VehicleKind.car
+              ? 'ESP32 4WD car, differential drive'
+              : 'Arduino Nano quadruped, gait-based walking',
+          icon: settings.vehicleKind == VehicleKind.car
+              ? Icons.directions_car_rounded
+              : Icons.bug_report_rounded,
+          trailing: AppBadge(
+            label: settings.vehicleKind.label.toUpperCase(),
+            level: StatusLevel.neutral,
+            showIcon: false,
+            size: AppBadgeSize.small,
+          ),
+          onTap: () {
+            _tick();
+            final next = settings.vehicleKind == VehicleKind.car
+                ? VehicleKind.spider
+                : VehicleKind.car;
+            controller.update(
+              (s) => s.copyWith(
+                vehicleKind: next,
+                vehicleName: next.defaultVehicleName,
+              ),
+            );
+          },
+        ),
         SettingsRow(
           label: 'Vehicle name',
           description: settings.vehicleName,
@@ -246,100 +289,109 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
   }
 
   Widget _controlsSection(AppSettings settings, SettingsController controller) {
+    final isCar = settings.vehicleKind == VehicleKind.car;
+
     return SettingsSection(
       title: SettingsCategory.controls.label,
       icon: SettingsCategory.controls.icon,
       children: [
-        SettingsRow(
-          label: 'Joystick side',
-          description: settings.joystickSide.description,
-          icon: Icons.swap_horiz_rounded,
-          trailing: AppBadge(
-            label: settings.joystickSide.label,
-            level: StatusLevel.neutral,
-            showIcon: false,
-            size: AppBadgeSize.small,
+        // Joystick side/sensitivity/ramping only mean something for the
+        // car's analog differential drive — the spiderbot's direction pad
+        // has nothing continuous to tune.
+        if (isCar) ...[
+          SettingsRow(
+            label: 'Joystick side',
+            description: settings.joystickSide.description,
+            icon: Icons.swap_horiz_rounded,
+            trailing: AppBadge(
+              label: settings.joystickSide.label,
+              level: StatusLevel.neutral,
+              showIcon: false,
+              size: AppBadgeSize.small,
+            ),
+            onTap: () {
+              _tick();
+              controller.update(
+                (s) => s.copyWith(joystickSide: s.joystickSide.opposite),
+              );
+            },
           ),
-          onTap: () {
-            _tick();
-            controller.update(
-              (s) => s.copyWith(joystickSide: s.joystickSide.opposite),
-            );
-          },
-        ),
-        Padding(
-          padding: const EdgeInsets.fromLTRB(
-            AppSpacing.lg,
-            AppSpacing.lg,
-            AppSpacing.lg,
-            AppSpacing.sm,
+          Padding(
+            padding: const EdgeInsets.fromLTRB(
+              AppSpacing.lg,
+              AppSpacing.lg,
+              AppSpacing.lg,
+              AppSpacing.sm,
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                AppSlider(
+                  label: 'JOYSTICK SENSITIVITY',
+                  leadingIcon: Icons.tune_rounded,
+                  value: settings.joystickSensitivity,
+                  min: SettingsRange.minSensitivity,
+                  max: SettingsRange.maxSensitivity,
+                  divisions: 15,
+                  valueFormatter: (v) => '${v.toStringAsFixed(1)}×',
+                  helperText:
+                      'Higher values respond more aggressively off-centre.',
+                  onChanged: (value) => controller.update(
+                    (s) => s.copyWith(joystickSensitivity: value),
+                  ),
+                ),
+                const SizedBox(height: AppSpacing.lg),
+                AppSlider(
+                  label: 'DEAD ZONE',
+                  leadingIcon: Icons.adjust_rounded,
+                  value: settings.deadZonePercent.toDouble(),
+                  min: SettingsRange.minDeadZonePercent.toDouble(),
+                  max: SettingsRange.maxDeadZonePercent.toDouble(),
+                  divisions: 40,
+                  unit: '%',
+                  helperText: 'Stick travel near centre treated as neutral.',
+                  onChanged: (value) => controller.update(
+                    (s) => s.copyWith(deadZonePercent: value.round()),
+                  ),
+                ),
+                const SizedBox(height: AppSpacing.lg),
+                AppSlider(
+                  label: 'ACCELERATION',
+                  leadingIcon: Icons.trending_up_rounded,
+                  value: settings.accelerationRate,
+                  min: SettingsRange.minRamp,
+                  max: SettingsRange.maxRamp,
+                  divisions: 19,
+                  unit: '%/s',
+                  helperText:
+                      'How quickly output rises toward the stick position.',
+                  onChanged: (value) => controller.update(
+                    (s) => s.copyWith(accelerationRate: value),
+                  ),
+                ),
+                const SizedBox(height: AppSpacing.lg),
+                AppSlider(
+                  label: 'DECELERATION',
+                  leadingIcon: Icons.trending_down_rounded,
+                  value: settings.decelerationRate,
+                  min: SettingsRange.minRamp,
+                  max: SettingsRange.maxRamp,
+                  divisions: 19,
+                  unit: '%/s',
+                  helperText: 'How quickly output falls when easing off.',
+                  onChanged: (value) => controller.update(
+                    (s) => s.copyWith(decelerationRate: value),
+                  ),
+                ),
+              ],
+            ),
           ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              AppSlider(
-                label: 'JOYSTICK SENSITIVITY',
-                leadingIcon: Icons.tune_rounded,
-                value: settings.joystickSensitivity,
-                min: SettingsRange.minSensitivity,
-                max: SettingsRange.maxSensitivity,
-                divisions: 15,
-                valueFormatter: (v) => '${v.toStringAsFixed(1)}×',
-                helperText:
-                    'Higher values respond more aggressively off-centre.',
-                onChanged: (value) => controller.update(
-                  (s) => s.copyWith(joystickSensitivity: value),
-                ),
-              ),
-              const SizedBox(height: AppSpacing.lg),
-              AppSlider(
-                label: 'DEAD ZONE',
-                leadingIcon: Icons.adjust_rounded,
-                value: settings.deadZonePercent.toDouble(),
-                min: SettingsRange.minDeadZonePercent.toDouble(),
-                max: SettingsRange.maxDeadZonePercent.toDouble(),
-                divisions: 40,
-                unit: '%',
-                helperText: 'Stick travel near centre treated as neutral.',
-                onChanged: (value) => controller.update(
-                  (s) => s.copyWith(deadZonePercent: value.round()),
-                ),
-              ),
-              const SizedBox(height: AppSpacing.lg),
-              AppSlider(
-                label: 'ACCELERATION',
-                leadingIcon: Icons.trending_up_rounded,
-                value: settings.accelerationRate,
-                min: SettingsRange.minRamp,
-                max: SettingsRange.maxRamp,
-                divisions: 19,
-                unit: '%/s',
-                helperText:
-                    'How quickly output rises toward the stick position.',
-                onChanged: (value) => controller.update(
-                  (s) => s.copyWith(accelerationRate: value),
-                ),
-              ),
-              const SizedBox(height: AppSpacing.lg),
-              AppSlider(
-                label: 'DECELERATION',
-                leadingIcon: Icons.trending_down_rounded,
-                value: settings.decelerationRate,
-                min: SettingsRange.minRamp,
-                max: SettingsRange.maxRamp,
-                divisions: 19,
-                unit: '%/s',
-                helperText: 'How quickly output falls when easing off.',
-                onChanged: (value) => controller.update(
-                  (s) => s.copyWith(decelerationRate: value),
-                ),
-              ),
-            ],
-          ),
-        ),
+        ],
         SettingsSwitchRow(
           label: 'Haptic feedback',
-          description: 'Vibrate on joystick engagement and direction changes',
+          description: isCar
+              ? 'Vibrate on joystick engagement and direction changes'
+              : 'Vibrate on direction-pad presses',
           icon: Icons.vibration_rounded,
           value: settings.hapticsEnabled,
           onChanged: (value) {

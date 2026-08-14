@@ -5,6 +5,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import '../models/settings.dart';
 import '../models/vehicle.dart';
+import '../models/vehicle_kind.dart';
 
 /// Local persistence for settings, the remembered vehicle and recent activity.
 ///
@@ -16,7 +17,12 @@ class StorageService {
   final SharedPreferences _prefs;
 
   static const String _keySettings = 'roveros.settings.v1';
-  static const String _keyVehicle = 'roveros.vehicle.v1';
+
+  /// Pre-spiderbot storage key — every record written under it is a car
+  /// record. Still read as a fallback so an existing install's saved car
+  /// pairing survives the move to per-kind keys with no migration step.
+  static const String _keyVehicleLegacy = 'roveros.vehicle.v1';
+
   static const String _keyActivity = 'roveros.activity.v1';
   static const String _keyOnboarded = 'roveros.onboarded.v1';
 
@@ -48,10 +54,19 @@ class StorageService {
     jsonEncode(settings.normalized().toJson()),
   );
 
-  // --- Remembered vehicle ---------------------------------------------------
+  // --- Remembered vehicle -----------------------------------------------
 
-  RememberedVehicle? loadVehicle() {
-    final raw = _prefs.getString(_keyVehicle);
+  /// Each [VehicleKind] remembers its own device, so a phone can be paired
+  /// with both a car and a spider at once and switch between them.
+  String _keyVehicle(VehicleKind kind) => 'roveros.vehicle.${kind.name}.v1';
+
+  RememberedVehicle? loadVehicle(VehicleKind kind) {
+    var raw = _prefs.getString(_keyVehicle(kind));
+    // Nothing saved under the per-kind key yet — for `car`, fall back to the
+    // legacy single-slot key rather than treating an existing pairing as gone.
+    raw ??= kind == VehicleKind.car
+        ? _prefs.getString(_keyVehicleLegacy)
+        : null;
     if (raw == null) return null;
     try {
       final decoded = jsonDecode(raw);
@@ -64,9 +79,13 @@ class StorageService {
   }
 
   Future<bool> saveVehicle(RememberedVehicle vehicle) =>
-      _prefs.setString(_keyVehicle, jsonEncode(vehicle.toJson()));
+      _prefs.setString(_keyVehicle(vehicle.kind), jsonEncode(vehicle.toJson()));
 
-  Future<bool> forgetVehicle() => _prefs.remove(_keyVehicle);
+  Future<bool> forgetVehicle(VehicleKind kind) async {
+    final ok = await _prefs.remove(_keyVehicle(kind));
+    if (kind == VehicleKind.car) await _prefs.remove(_keyVehicleLegacy);
+    return ok;
+  }
 
   // --- First run ------------------------------------------------------------
 
@@ -137,7 +156,8 @@ class StorageService {
   Future<void> clearAll() async {
     await Future.wait([
       _prefs.remove(_keySettings),
-      _prefs.remove(_keyVehicle),
+      _prefs.remove(_keyVehicleLegacy),
+      for (final kind in VehicleKind.values) _prefs.remove(_keyVehicle(kind)),
       _prefs.remove(_keyActivity),
       _prefs.remove(_keyOnboarded),
     ]);

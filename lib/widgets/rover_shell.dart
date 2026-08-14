@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 
 import '../core/router/app_router.dart';
 import '../core/theme/app_theme.dart';
+import '../features/settings/settings_controller.dart';
 import '../features/telemetry/telemetry_history.dart';
 
 /// Shell around the tabbed portrait screens.
@@ -32,7 +33,9 @@ class RoverShell extends ConsumerWidget {
         currentBranch: shell.currentIndex,
         onSelectBranch: (index) =>
             shell.goBranch(index, initialLocation: index == shell.currentIndex),
-        onDrive: () => context.push(AppRoute.drive),
+        onDrive: () => context.push(
+          AppRoute.driveFor(ref.read(settingsProvider).vehicleKind),
+        ),
       ),
     );
   }

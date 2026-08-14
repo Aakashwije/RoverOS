@@ -7,20 +7,29 @@ import 'package:flutter_blue_plus/flutter_blue_plus.dart';
 import '../../core/constants/app_config.dart';
 import '../../core/constants/command_constants.dart';
 import '../../models/vehicle.dart';
+import '../../models/vehicle_kind.dart';
 import 'transport.dart';
 
-/// Bluetooth Low Energy link to the ESP32, speaking the Nordic UART Service —
-/// the de-facto BLE serial profile that ESP32 Arduino sketches expose.
+/// Bluetooth Low Energy link to a vehicle, speaking whichever [BleProfile]
+/// [profile] describes — the Nordic UART Service for the car, an HM-10/AT-09
+/// style single-characteristic profile for the spiderbot's add-on BLE module.
 ///
 /// Responsibilities stop at moving bytes: this class discovers the service,
 /// keeps a subscription open, reassembles frames and reports failures in terms
 /// the UI can act on. It never interprets a command.
 class BluetoothTransport implements Transport {
-  BluetoothTransport();
+  BluetoothTransport({required BleProfile profile})
+    : _serviceUuid = Guid(profile.serviceUuid),
+      _rxUuid = Guid(profile.writeCharUuid),
+      _txUuid = Guid(profile.notifyCharUuid);
 
-  static final Guid _serviceUuid = Guid(AppConfig.nordicUartService);
-  static final Guid _rxUuid = Guid(AppConfig.nordicUartRx);
-  static final Guid _txUuid = Guid(AppConfig.nordicUartTx);
+  /// May be identical to [_txUuid] — some BLE-serial modules use one
+  /// characteristic for both write and notify. [_bindUartService] handles
+  /// that case with no special casing: both lookups simply resolve to the
+  /// same characteristic.
+  final Guid _serviceUuid;
+  final Guid _rxUuid;
+  final Guid _txUuid;
 
   final _statusController = StreamController<TransportStatus>.broadcast();
   final _inboundController = StreamController<String>.broadcast();

@@ -1,6 +1,7 @@
 import '../core/constants/app_config.dart';
 import '../core/utils/validation.dart';
 import 'commands.dart';
+import 'vehicle_kind.dart';
 
 enum DistanceUnits {
   metric('METRIC', 'cm'),
@@ -67,6 +68,7 @@ enum FlashSpeed {
 class AppSettings {
   const AppSettings({
     // VEHICLE
+    this.vehicleKind = VehicleKind.car,
     this.vehicleName = 'ESP32-CAR',
     this.maxSpeedPercent = 70,
     this.defaultDriveMode = DriveMode.manual,
@@ -107,6 +109,11 @@ class AppSettings {
   static const AppSettings defaults = AppSettings();
 
   // VEHICLE
+
+  /// Which physical vehicle is currently active — determines the BLE profile
+  /// scanned/connected, which wire commands the drive screen sends, and which
+  /// remembered device (see `StorageService.loadVehicle`) is in play.
+  final VehicleKind vehicleKind;
   final String vehicleName;
 
   /// Ceiling applied to every motor command the app emits.
@@ -186,6 +193,7 @@ class AppSettings {
     ).clamp(servoMin, servoMax).toInt();
 
     return AppSettings(
+      vehicleKind: vehicleKind,
       vehicleName: Validators.sanitizeVehicleName(vehicleName),
       maxSpeedPercent: Validators.speedPercent(maxSpeedPercent),
       defaultDriveMode: defaultDriveMode,
@@ -217,6 +225,7 @@ class AppSettings {
   }
 
   AppSettings copyWith({
+    VehicleKind? vehicleKind,
     String? vehicleName,
     int? maxSpeedPercent,
     DriveMode? defaultDriveMode,
@@ -246,6 +255,7 @@ class AppSettings {
     bool? mockMode,
   }) {
     return AppSettings(
+      vehicleKind: vehicleKind ?? this.vehicleKind,
       vehicleName: vehicleName ?? this.vehicleName,
       maxSpeedPercent: maxSpeedPercent ?? this.maxSpeedPercent,
       defaultDriveMode: defaultDriveMode ?? this.defaultDriveMode,
@@ -278,6 +288,7 @@ class AppSettings {
   }
 
   Map<String, dynamic> toJson() => {
+    'vehicleKind': vehicleKind.name,
     'vehicleName': vehicleName,
     'maxSpeedPercent': maxSpeedPercent,
     'defaultDriveMode': defaultDriveMode.name,
@@ -329,6 +340,7 @@ class AppSettings {
 
     const d = AppSettings.defaults;
     return AppSettings(
+      vehicleKind: VehicleKind.fromName(json['vehicleKind'] as String?),
       vehicleName: pick('vehicleName', d.vehicleName),
       maxSpeedPercent: pickInt('maxSpeedPercent', d.maxSpeedPercent),
       defaultDriveMode: DriveMode.values.firstWhere(

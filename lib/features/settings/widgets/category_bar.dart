@@ -14,10 +14,16 @@ class CategoryBar extends StatefulWidget {
     super.key,
     required this.active,
     required this.onSelected,
+    this.categories = SettingsCategory.values,
   });
 
   final SettingsCategory active;
   final ValueChanged<SettingsCategory> onSelected;
+
+  /// Which chips to show. Defaults to every category; the active vehicle kind
+  /// may hide the ones it has no settings for (e.g. Motors/Sensors/Lights for
+  /// the spiderbot) so there is never a chip that scrolls to nothing.
+  final List<SettingsCategory> categories;
 
   /// Fixed height, so the pinned sliver header does not resize while scrolling
   /// and the scroll-target maths can subtract a constant.
@@ -29,13 +35,18 @@ class CategoryBar extends StatefulWidget {
 
 class _CategoryBarState extends State<CategoryBar> {
   final ScrollController _controller = ScrollController();
-  final Map<SettingsCategory, GlobalKey> _chipKeys = {
-    for (final category in SettingsCategory.values) category: GlobalKey(),
+  late Map<SettingsCategory, GlobalKey> _chipKeys = {
+    for (final category in widget.categories) category: GlobalKey(),
   };
 
   @override
-  void didUpdateWidget(CategoryBar oldWidget) {
+  void didUpdateWidget(covariant CategoryBar oldWidget) {
     super.didUpdateWidget(oldWidget);
+    if (widget.categories != oldWidget.categories) {
+      _chipKeys = {
+        for (final category in widget.categories) category: GlobalKey(),
+      };
+    }
     if (widget.active != oldWidget.active) _revealActive();
   }
 
@@ -89,14 +100,14 @@ class _CategoryBarState extends State<CategoryBar> {
           vertical: AppSpacing.sm,
         ),
         children: [
-          for (final category in SettingsCategory.values) ...[
+          for (final category in widget.categories) ...[
             _CategoryChip(
               key: _chipKeys[category],
               category: category,
               isActive: category == widget.active,
               onTap: () => widget.onSelected(category),
             ),
-            if (category != SettingsCategory.values.last)
+            if (category != widget.categories.last)
               const SizedBox(width: AppSpacing.sm),
           ],
         ],
@@ -168,10 +179,15 @@ class _CategoryChip extends StatelessWidget {
 
 /// Pins [CategoryBar] under the app bar as the list scrolls.
 class CategoryBarDelegate extends SliverPersistentHeaderDelegate {
-  const CategoryBarDelegate({required this.active, required this.onSelected});
+  const CategoryBarDelegate({
+    required this.active,
+    required this.onSelected,
+    this.categories = SettingsCategory.values,
+  });
 
   final SettingsCategory active;
   final ValueChanged<SettingsCategory> onSelected;
+  final List<SettingsCategory> categories;
 
   @override
   double get minExtent => CategoryBar.height;
@@ -185,10 +201,16 @@ class CategoryBarDelegate extends SliverPersistentHeaderDelegate {
     double shrinkOffset,
     bool overlapsContent,
   ) {
-    return CategoryBar(active: active, onSelected: onSelected);
+    return CategoryBar(
+      active: active,
+      onSelected: onSelected,
+      categories: categories,
+    );
   }
 
   @override
   bool shouldRebuild(CategoryBarDelegate oldDelegate) =>
-      oldDelegate.active != active || oldDelegate.onSelected != onSelected;
+      oldDelegate.active != active ||
+      oldDelegate.onSelected != onSelected ||
+      oldDelegate.categories != categories;
 }

@@ -290,9 +290,9 @@ class _WelcomeStep extends StatelessWidget {
       art: const RoverMark(size: 132),
       title: 'Welcome to ${AppConfig.appName}',
       body:
-          'A control dashboard for an ESP32 four-wheel-drive rover. Four short '
-          'steps and you will be driving — you can change any of these answers '
-          'later in Settings.',
+          'A control dashboard for a DIY robot — the ESP32 four-wheel-drive '
+          'car or the Arduino spiderbot. Four short steps and you will be '
+          'driving — you can change any of these answers later in Settings.',
     );
   }
 }
@@ -327,8 +327,9 @@ class _ModeStep extends StatelessWidget {
             icon: Icons.directions_car_rounded,
             title: 'Real vehicle',
             description:
-                'Connect over Bluetooth to an ESP32 board running the ROVEROS '
-                'firmware.',
+                'Connect over Bluetooth to a board running the ROVEROS '
+                'firmware — the ESP32 car or the Arduino spiderbot. Pick '
+                'which one in Settings → Vehicle.',
             isSelected: !isMockMode,
             accent: AppColors.accent,
             onTap: () => onChanged(false),

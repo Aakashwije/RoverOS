@@ -45,15 +45,6 @@ abstract final class AppConfig {
   static const Duration reconnectMaxDelay = Duration(seconds: 20);
   static const int maxReconnectAttempts = 6;
 
-  /// Names matching these prefixes float to the top of the scan list.
-  static const List<String> knownDeviceNameHints = [
-    'ESP32',
-    'ROVER',
-    'OPTIMUS',
-    'CAR',
-    'BT',
-  ];
-
   // --- Nordic UART Service (the de-facto standard for ESP32 BLE serial) -----
 
   static const String nordicUartService =

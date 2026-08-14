@@ -43,6 +43,10 @@ abstract final class Wire {
   static const String verbTestMotor = 'TESTMOTOR';
   static const String verbCalibrate = 'CAL';
 
+  /// Spiderbot gait command — the only verb outside the OP0148 car's
+  /// vocabulary. See `lib/services/spider_commands.dart`.
+  static const String verbWalk = 'WALK';
+
   static const Set<String> knownVerbs = {
     verbDrive,
     verbStop,
@@ -56,6 +60,7 @@ abstract final class Wire {
     verbPing,
     verbTestMotor,
     verbCalibrate,
+    verbWalk,
   };
 
   // --- Command keys ---------------------------------------------------------
@@ -76,6 +81,7 @@ abstract final class Wire {
   static const String keyServoCenter = 'SCENTER';
   static const String keyServoMin = 'SMIN';
   static const String keyServoMax = 'SMAX';
+  static const String keyDirection = 'DIR';
 
   // --- Telemetry keys -------------------------------------------------------
 
@@ -133,6 +139,15 @@ abstract final class Wire {
   static const String stateAvoiding = 'AVOIDING';
   static const String stateScanning = 'SCANNING';
   static const String stateFault = 'FAULT';
+
+  // --- Spiderbot: CMD:WALK direction values ----------------------------------
+
+  static const String dirForward = 'FWD';
+  static const String dirBack = 'BACK';
+  static const String dirLeft = 'LEFT';
+  static const String dirRight = 'RIGHT';
+  static const String dirRotateLeft = 'ROTL';
+  static const String dirRotateRight = 'ROTR';
 }
 
 /// Error codes reported by the ESP32 in `ERROR;CODE:nn;MSG:...` frames.

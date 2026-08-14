@@ -78,7 +78,9 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     switch (action) {
       case HomeAction.drive:
       case HomeAction.driveWithCare:
-        context.push(AppRoute.drive);
+        context.push(
+          AppRoute.driveFor(ref.read(settingsProvider).vehicleKind),
+        );
       case HomeAction.connect:
       case HomeAction.reconnect:
         context.push(AppRoute.connect);
@@ -201,12 +203,14 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                         settings: settings,
                         driveMode: driveMode,
                         isConnected: link.isConnected,
+                        kind: settings.vehicleKind,
                       ),
                       const SizedBox(height: AppSpacing.lg),
                       VehicleStatusCard(
                         link: link,
                         telemetry: telemetry,
                         driveMode: driveMode,
+                        kind: settings.vehicleKind,
                         onConnect: () => context.push(AppRoute.connect),
                       ),
                     ],
