@@ -8,36 +8,42 @@
   Built to feel like an EV instrument cluster and an RC transmitter — not a bare-bones Arduino remote.
 
   <p>
-    <img alt="platform" src="https://img.shields.io/badge/platform-Android%20%7C%20iOS-blue">
-    <img alt="flutter" src="https://img.shields.io/badge/Flutter-3.44-02569B">
-    <img alt="tests" src="https://img.shields.io/badge/tests-100%20passing-brightgreen">
-    <img alt="license" src="https://img.shields.io/badge/license-Proprietary-red">
-    <img alt="status" src="https://img.shields.io/badge/status-closed--source-lightgrey">
+    <img alt="Flutter" src="https://img.shields.io/badge/Flutter-3.44-02569B?style=for-the-badge&logo=flutter&logoColor=white">
+    <img alt="Dart" src="https://img.shields.io/badge/Dart-3.12-0175C2?style=for-the-badge&logo=dart&logoColor=white">
+    <img alt="Android" src="https://img.shields.io/badge/Android-3DDC84?style=for-the-badge&logo=android&logoColor=white">
+    <img alt="iOS" src="https://img.shields.io/badge/iOS-000000?style=for-the-badge&logo=apple&logoColor=white">
+  </p>
+  <p>
+    <img alt="vehicles" src="https://img.shields.io/badge/vehicles-Car%20%2B%20Spider-FF6B35?style=for-the-badge">
+    <img alt="tests" src="https://img.shields.io/badge/tests-100%20passing-2ECC71?style=for-the-badge">
+    <img alt="license" src="https://img.shields.io/badge/license-Proprietary-E63946?style=for-the-badge">
+    <img alt="status" src="https://img.shields.io/badge/status-closed--source-6C757D?style=for-the-badge">
   </p>
 </div>
 
 ---
 
-> **⚠ Proprietary — Closed Source.** This repository and everything in it is
+> [!WARNING]
+> **Proprietary — Closed Source.** This repository and everything in it is
 > confidential and proprietary. No licence is granted to use, copy, modify,
 > merge, publish, distribute, sublicense, or sell copies of this software.
 > See [License](#license).
 
 ## Table of contents
 
-- [What this is](#what-this-is)
-- [Tech stack](#tech-stack)
-- [Hardware targets](#hardware-targets)
-- [Screens](#screens)
-- [Architecture](#architecture)
-- [Data flow](#data-flow)
-- [Sequence diagrams](#sequence-diagrams)
-- [Safety model](#safety-model)
-- [How it works, step by step](#how-it-works-step-by-step)
-- [Getting started](#getting-started)
-- [Testing](#testing)
-- [Known limitations](#known-limitations)
-- [License](#license)
+- 🤖 [What this is](#what-this-is)
+- 🧰 [Tech stack](#tech-stack)
+- 🔩 [Hardware targets](#hardware-targets)
+- 📱 [Screens](#screens)
+- 🏗️ [Architecture](#architecture)
+- 🔄 [Data flow](#data-flow)
+- ⏱️ [Sequence diagrams](#sequence-diagrams)
+- 🛡️ [Safety model](#safety-model)
+- 🧭 [How it works, step by step](#how-it-works-step-by-step)
+- 🚀 [Getting started](#getting-started)
+- ✅ [Testing](#testing)
+- ⚠️ [Known limitations](#known-limitations)
+- 📄 [License](#license)
 
 ## What this is
 
@@ -47,15 +53,15 @@ high-contrast dashboard. It currently speaks to two vehicles, switchable from
 profile but sharing one app, one wire protocol grammar, and one transport
 layer:
 
-- **The ESP32 "Optimus" 4WD car** — an analog virtual joystick driving a
+- 🚗 **The ESP32 "Optimus" 4WD car** — an analog virtual joystick driving a
   differential-drive chassis, live telemetry (battery, distance, servo angle,
   motor output), and a phone-side perception layer that turns the raw HC-SR04
   ultrasonic sensor into a filtered, confidence-scored estimate — closing
   speed, time-to-contact, gap-finding — without the vehicle ever ceding a
   single safety decision to the app.
-- **The Arduino Nano "Spiderbot"** — a direction-pad HUD driving a 4-leg trot
-  gait over BLE via an add-on BLE-serial module (the Nano has no radio of its
-  own). See [`firmware/roveros_spiderbot/README.md`](firmware/roveros_spiderbot/README.md)
+- 🕷️ **The Arduino Nano "Spiderbot"** — a direction-pad HUD driving a 4-leg
+  trot gait over BLE via an add-on BLE-serial module (the Nano has no radio of
+  its own). See [`firmware/roveros_spiderbot/README.md`](firmware/roveros_spiderbot/README.md)
   for wiring and known gaps — this side is newer and has not been
   hardware-verified yet (see [Known limitations](#known-limitations)).
 
@@ -82,6 +88,8 @@ built, demoed, and tested without a soldering iron.
 
 ### Car — ESP32 "Optimus" 4WD
 
+<img alt="vehicle: car" src="https://img.shields.io/badge/vehicle-Car-02569B?style=flat-square&logo=espressif&logoColor=white">
+
 | Component | Role |
 |---|---|
 | ESP32 "Optimus" controller board | Central MCU, BLE peripheral |
@@ -95,6 +103,8 @@ Firmware: [`firmware/roveros_op0148/`](firmware/roveros_op0148/).
 
 ### Spider — Arduino Nano "Spiderbot"
 
+<img alt="vehicle: spider" src="https://img.shields.io/badge/vehicle-Spider-8E44AD?style=flat-square&logo=arduino&logoColor=white">
+
 | Component | Role |
 |---|---|
 | Arduino Nano | Central MCU — no radio of its own |
@@ -102,29 +112,32 @@ Firmware: [`firmware/roveros_op0148/`](firmware/roveros_op0148/).
 | 8× MG90 servo (hip + knee × 4 legs) | Trot gait |
 | 2× 18650 Li-ion | Power |
 
-Firmware: [`firmware/roveros_spiderbot/`](firmware/roveros_spiderbot/) — this
-kit ships generic with no fixed pinout, so wiring, exact BLE module UUIDs and
-gait tuning are starting points to verify on the bench, not confirmed values;
-see that folder's README for the specifics.
+Firmware: [`firmware/roveros_spiderbot/`](firmware/roveros_spiderbot/).
 
-**The phone never makes a safety decision, for either vehicle.** Motor/gait
-stop logic and the communication watchdog live on the vehicle's own MCU (plus
-autonomous obstacle-avoidance decisions, for the car). The app only sends
-high-level commands and displays what the vehicle reports back — see [Safety
-model](#safety-model) below.
+> [!CAUTION]
+> This kit ships generic with no fixed pinout, so wiring, exact BLE module
+> UUIDs and gait tuning are starting points to verify on the bench, not
+> confirmed values — see that folder's README for the specifics.
+
+> [!IMPORTANT]
+> **The phone never makes a safety decision, for either vehicle.** Motor/gait
+> stop logic and the communication watchdog live on the vehicle's own MCU
+> (plus autonomous obstacle-avoidance decisions, for the car). The app only
+> sends high-level commands and displays what the vehicle reports back — see
+> [Safety model](#safety-model) below.
 
 ## Screens
 
 | Screen | Orientation | Purpose |
 |---|---|---|
-| Splash | Portrait | Boot sequence: load settings, check saved vehicle, animate in |
-| Home | Portrait | Vehicle status, battery, readiness, recent activity, START DRIVING |
-| Connect | Portrait | BLE scan/connect/reconnect (against the active vehicle's `BleProfile`), connection-quality detail |
-| **Drive** (car) | **Landscape** | Joystick, speed, emergency stop, lights, distance, servo/radar preview |
-| **Drive** (spider) | **Landscape** | Direction pad, gait speed, emergency stop, animated walking indicator |
-| Auto | Portrait | MANUAL / OBSTACLE AVOIDANCE / AUTO SCAN, live radar, vehicle decisions — car only, see [Known limitations](#known-limitations) |
-| Telemetry | Portrait | Full dashboard: every reported value, link health, trend sparklines, last ACK, errors |
-| Settings | Portrait | Vehicle type, controls, motors, sensors, lights, connection, app preferences — the spider hides the car-only calibration sections |
+| 🌊 Splash | Portrait | Boot sequence: load settings, check saved vehicle, animate in |
+| 🏠 Home | Portrait | Vehicle status, battery, readiness, recent activity, START DRIVING |
+| 🔗 Connect | Portrait | BLE scan/connect/reconnect (against the active vehicle's `BleProfile`), connection-quality detail |
+| 🕹️ **Drive** (car) | **Landscape** | Joystick, speed, emergency stop, lights, distance, servo/radar preview |
+| 🕷️ **Drive** (spider) | **Landscape** | Direction pad, gait speed, emergency stop, animated walking indicator |
+| 🧭 Auto | Portrait | MANUAL / OBSTACLE AVOIDANCE / AUTO SCAN, live radar, vehicle decisions — car only, see [Known limitations](#known-limitations) |
+| 📊 Telemetry | Portrait | Full dashboard: every reported value, link health, trend sparklines, last ACK, errors |
+| ⚙️ Settings | Portrait | Vehicle type, controls, motors, sensors, lights, connection, app preferences — the spider hides the car-only calibration sections |
 
 ## Architecture
 
@@ -357,9 +370,10 @@ sequenceDiagram
 
 ## Safety model
 
-These apply to both vehicles unless noted — each MCU (ESP32 or Nano) runs its
-own independent copy of the watchdog logic; nothing here is shared code
-between them, just the same design repeated on each firmware.
+> [!NOTE]
+> These apply to both vehicles unless noted — each MCU (ESP32 or Nano) runs
+> its own independent copy of the watchdog logic; nothing here is shared
+> code between them, just the same design repeated on each firmware.
 
 1. **The vehicle owns the stop.** Both firmwares run their own communication
    watchdog — if no valid drive command arrives within a configurable window
@@ -428,14 +442,15 @@ flutter pub get
 flutter run                # Mock mode is on by default — no hardware needed
 ```
 
-Mock mode is enabled out of the box (Settings → App → **Mock mode**), so
-`flutter run` gets you a fully interactive simulated vehicle immediately:
-connect, drive, watch the battery drain under load, trigger obstacle
-avoidance, and inject faults, all without any hardware in the room. Switch
-**Settings → Vehicle → Vehicle type** to try the spider's direction-pad HUD
-instead of the car's joystick — mock mode for the spider is deliberately
-thinner (it ACKs commands and reports battery/state, but doesn't simulate a
-gait; see [Known limitations](#known-limitations)).
+> [!TIP]
+> Mock mode is enabled out of the box (Settings → App → **Mock mode**), so
+> `flutter run` gets you a fully interactive simulated vehicle immediately:
+> connect, drive, watch the battery drain under load, trigger obstacle
+> avoidance, and inject faults, all without any hardware in the room. Switch
+> **Settings → Vehicle → Vehicle type** to try the spider's direction-pad HUD
+> instead of the car's joystick — mock mode for the spider is deliberately
+> thinner (it ACKs commands and reports battery/state, but doesn't simulate a
+> gait; see [Known limitations](#known-limitations)).
 
 To drive real hardware, turn **Mock mode** off in Settings. The app then
 scans for BLE devices matching the active vehicle's `BleProfile` — the Nordic
@@ -485,24 +500,27 @@ limitations](#known-limitations)).
   environment; `BluetoothTransport` compiles and follows the Nordic UART
   Service convention, but pairing with real ESP32 firmware has not been
   hardware-verified here.
-- **The spiderbot side is newer and unverified against real hardware** — the
-  kit this targets hadn't been assembled while this was written:
-  - The spider's default BLE UUIDs
-    ([`vehicle_kind.dart`](lib/models/vehicle_kind.dart)) are the common
-    HM-10/AT-09 defaults, not a confirmed value for any specific module.
-  - `firmware/roveros_spiderbot/gait.h`'s leg angles, pin assignments and
-    step timing are starting points that need bench tuning once legs are
-    wired — see that file's `GaitTuning` block and the firmware README's
-    "Known gaps".
-  - `CMD:WALK`'s speed field round-trips through the app but the firmware
-    doesn't act on it yet — every gait step runs at one fixed cadence.
-  - Spider mock mode ACKs commands and reports battery/state but does not
-    simulate an actual gait, and the demo/fault-injection panel (Settings →
-    App → Simulator controls) is still car-only — it references the car's
-    HC-SR04/battery/obstacle model regardless of which vehicle kind is
-    active.
-  - No Dart test coverage yet for `SpiderCommands`, `SpiderDriveController`
-    or `GaitEngine` (see [Testing](#testing)).
+
+> [!IMPORTANT]
+> **The spiderbot side is newer and unverified against real hardware** — the
+> kit this targets hadn't been assembled while this was written.
+
+- 🔌 The spider's default BLE UUIDs
+  ([`vehicle_kind.dart`](lib/models/vehicle_kind.dart)) are the common
+  HM-10/AT-09 defaults, not a confirmed value for any specific module.
+- 🦿 `firmware/roveros_spiderbot/gait.h`'s leg angles, pin assignments and
+  step timing are starting points that need bench tuning once legs are
+  wired — see that file's `GaitTuning` block and the firmware README's
+  "Known gaps".
+- 🐌 `CMD:WALK`'s speed field round-trips through the app but the firmware
+  doesn't act on it yet — every gait step runs at one fixed cadence.
+- 🎭 Spider mock mode ACKs commands and reports battery/state but does not
+  simulate an actual gait, and the demo/fault-injection panel (Settings →
+  App → Simulator controls) is still car-only — it references the car's
+  HC-SR04/battery/obstacle model regardless of which vehicle kind is
+  active.
+- 🧪 No Dart test coverage yet for `SpiderCommands`, `SpiderDriveController`
+  or `GaitEngine` (see [Testing](#testing)).
 - No CI pipeline is configured — `flutter analyze` / `flutter test` /
   `flutter build apk` are run manually (see [Testing](#testing)).
 - Release signing for Android/iOS is left to the maintainer.
