@@ -22,6 +22,7 @@ import 'drive_controller.dart' show DriveArmState;
 import 'spider_drive_controller.dart';
 import 'widgets/direction_pad.dart';
 import 'widgets/emergency_stop_button.dart';
+import 'widgets/walking_indicator.dart';
 
 /// Landscape driving HUD for the spiderbot.
 ///
@@ -78,7 +79,10 @@ class _SpiderDriveScreenState extends ConsumerState<SpiderDriveScreen>
     ref.read(spiderDriveProvider.notifier).press(direction);
   }
 
-  void _onRelease() => ref.read(spiderDriveProvider.notifier).release();
+  void _onRelease() {
+    Haptics.selection(enabled: ref.read(settingsProvider).hapticsEnabled);
+    ref.read(spiderDriveProvider.notifier).release();
+  }
 
   Future<void> _onEmergencyStop() async {
     Haptics.emergency();
@@ -114,6 +118,8 @@ class _SpiderDriveScreenState extends ConsumerState<SpiderDriveScreen>
                           child: Column(
                             mainAxisSize: MainAxisSize.min,
                             children: [
+                              WalkingIndicator(direction: drive.direction),
+                              const SizedBox(height: AppSpacing.lg),
                               DirectionPad(
                                 activeDirection: drive.direction,
                                 enabled: !drive.isEmergencyStopped,
@@ -246,21 +252,30 @@ class _ArmStatePill extends StatelessWidget {
                 ? AppShadows.glow(color, blur: 14, opacity: 0.30)
                 : null,
           ),
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Icon(state.icon, size: 13, color: color),
-              const SizedBox(width: 5),
-              Text(
-                state.label,
-                style: AppTypography.label.copyWith(
-                  color: color,
-                  fontSize: 10,
-                  fontWeight: FontWeight.w900,
-                  letterSpacing: 0.6,
+          child: AnimatedSwitcher(
+            duration: AppDurations.fast,
+            switchInCurve: AppDurations.emphasized,
+            transitionBuilder: (child, animation) => FadeTransition(
+              opacity: animation,
+              child: ScaleTransition(scale: animation, child: child),
+            ),
+            child: Row(
+              key: ValueKey(state),
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(state.icon, size: 13, color: color),
+                const SizedBox(width: 5),
+                Text(
+                  state.label,
+                  style: AppTypography.label.copyWith(
+                    color: color,
+                    fontSize: 10,
+                    fontWeight: FontWeight.w900,
+                    letterSpacing: 0.6,
+                  ),
                 ),
-              ),
-            ],
+              ],
+            ),
           ),
         ),
       ),

@@ -69,7 +69,10 @@ class DirectionPad extends StatelessWidget {
   }
 }
 
-class _DirectionButton extends StatelessWidget {
+/// A direction button: presses squash down like a real key, and a held
+/// direction breathes with an outward pulse so "this is actively walking"
+/// reads at a glance instead of relying on the accent colour alone.
+class _DirectionButton extends StatefulWidget {
   const _DirectionButton({
     required this.icon,
     required this.label,
@@ -87,45 +90,133 @@ class _DirectionButton extends StatelessWidget {
   final VoidCallback onTapUp;
 
   @override
+  State<_DirectionButton> createState() => _DirectionButtonState();
+}
+
+class _DirectionButtonState extends State<_DirectionButton>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _pulse = AnimationController(
+    vsync: this,
+    duration: AppDurations.pulse,
+  );
+
+  bool _pressed = false;
+  bool _reduceMotion = false;
+
+  @override
+  void initState() {
+    super.initState();
+    if (widget.isActive) _pulse.repeat(reverse: true);
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final reduce = AppMotion.reduceMotion(context);
+    if (reduce == _reduceMotion) return;
+    _reduceMotion = reduce;
+    _syncPulse();
+  }
+
+  @override
+  void didUpdateWidget(_DirectionButton oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.isActive != oldWidget.isActive) _syncPulse();
+  }
+
+  void _syncPulse() {
+    if (widget.isActive && !_reduceMotion) {
+      _pulse.repeat(reverse: true);
+    } else {
+      _pulse.stop();
+      _pulse.value = 0;
+    }
+  }
+
+  void _setPressed(bool value) {
+    if (_pressed == value) return;
+    setState(() => _pressed = value);
+  }
+
+  @override
+  void dispose() {
+    _pulse.dispose();
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
-    final color = !enabled
+    final color = !widget.enabled
         ? AppColors.textTertiary
-        : (isActive ? AppColors.accent : AppColors.textSecondary);
+        : (widget.isActive ? AppColors.accent : AppColors.textSecondary);
 
     return Semantics(
       button: true,
-      enabled: enabled,
-      label: '$label. Hold to walk, release to stop.',
+      enabled: widget.enabled,
+      label: '${widget.label}. Hold to walk, release to stop.',
       child: ExcludeSemantics(
         child: GestureDetector(
-          onTapDown: enabled ? (_) => onTapDown() : null,
-          onTapUp: enabled ? (_) => onTapUp() : null,
-          onTapCancel: enabled ? onTapUp : null,
-          child: AnimatedContainer(
-            duration: AppDurations.instant,
-            width: 74,
-            height: 74,
-            decoration: BoxDecoration(
-              gradient: LinearGradient(
-                begin: Alignment.topCenter,
-                end: Alignment.bottomCenter,
-                colors: isActive
-                    ? [
-                        AppColors.accent.withValues(alpha: 0.28),
-                        AppColors.accent.withValues(alpha: 0.10),
-                      ]
-                    : [AppColors.surfaceElevated, AppColors.surfaceSunken],
-              ),
-              borderRadius: BorderRadius.circular(AppRadii.md),
-              border: Border.all(
-                color: isActive ? AppColors.accent : AppColors.border,
-                width: isActive ? 2 : 1,
-              ),
-              boxShadow: isActive
-                  ? AppShadows.glow(AppColors.accent, blur: 16, opacity: 0.35)
-                  : null,
-            ),
-            child: Icon(icon, size: 30, color: color),
+          onTapDown: widget.enabled
+              ? (_) {
+                  widget.onTapDown();
+                  _setPressed(true);
+                }
+              : null,
+          onTapUp: widget.enabled
+              ? (_) {
+                  widget.onTapUp();
+                  _setPressed(false);
+                }
+              : null,
+          onTapCancel: widget.enabled
+              ? () {
+                  widget.onTapUp();
+                  _setPressed(false);
+                }
+              : null,
+          child: AnimatedBuilder(
+            animation: _pulse,
+            builder: (context, child) {
+              final pulse = _reduceMotion ? 0.0 : _pulse.value;
+
+              return AnimatedScale(
+                scale: _pressed ? 0.90 : 1,
+                duration: AppDurations.instant,
+                curve: AppDurations.standard,
+                child: AnimatedContainer(
+                  duration: AppDurations.fast,
+                  curve: AppDurations.standard,
+                  width: 74,
+                  height: 74,
+                  decoration: BoxDecoration(
+                    gradient: LinearGradient(
+                      begin: Alignment.topCenter,
+                      end: Alignment.bottomCenter,
+                      colors: widget.isActive
+                          ? [
+                              AppColors.accent.withValues(alpha: 0.28),
+                              AppColors.accent.withValues(alpha: 0.10),
+                            ]
+                          : [AppColors.surfaceElevated, AppColors.surfaceSunken],
+                    ),
+                    borderRadius: BorderRadius.circular(AppRadii.md),
+                    border: Border.all(
+                      color: widget.isActive ? AppColors.accent : AppColors.border,
+                      width: widget.isActive ? 2 : 1,
+                    ),
+                    boxShadow: widget.isActive
+                        ? AppShadows.glow(
+                            AppColors.accent,
+                            blur: 14 + 8 * pulse,
+                            opacity: 0.30 + 0.25 * pulse,
+                          )
+                        : null,
+                  ),
+                  child: child,
+                ),
+              );
+            },
+            child: Icon(widget.icon, size: 30, color: color),
           ),
         ),
       ),
